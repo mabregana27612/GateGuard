@@ -58,14 +58,28 @@
                     <div class="text-center">
                         <h6 class="text-muted mb-3">
                             <i class="fas fa-camera me-2"></i>
-                            Camera Scanner (Simulation)
+                            Camera QR Scanner
                         </h6>
-                        <button type="button" class="btn btn-outline-primary" onclick="simulateQRScan()">
+                        <button type="button" class="btn btn-outline-primary" id="startCamera" onclick="startCamera()">
                             <i class="fas fa-camera me-2"></i>
-                            Simulate QR Scan
+                            Start Camera Scanner
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary d-none" id="stopCamera" onclick="stopCamera()">
+                            <i class="fas fa-stop me-2"></i>
+                            Stop Scanner
                         </button>
                         <div class="form-text mt-2">
-                            In a production environment, this would activate the camera for QR code scanning
+                            Click to activate camera and scan QR codes automatically
+                        </div>
+                    </div>
+                    
+                    <!-- Camera Video Container -->
+                    <div class="mt-3" id="cameraContainer" style="display: none;">
+                        <div class="text-center">
+                            <video id="qrVideo" width="300" height="200" style="border: 2px solid #ddd; border-radius: 8px;"></video>
+                            <div class="mt-2">
+                                <small class="text-muted">Position QR code within the camera view</small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -188,35 +202,202 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script>
-function simulateQRScan() {
-    // Simulate QR code scanning with demo IDs
-    const demoQRCodes = ['USER001', 'USER002', 'EMP123', 'GUEST456', 'ADMIN001'];
-    const randomQR = demoQRCodes[Math.floor(Math.random() * demoQRCodes.length)];
+let qrScanner = null;
+let videoElement = null;
 
-    // Show scanning animation
-    const button = event.target;
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Scanning...';
-    button.disabled = true;
+function startCamera() {
+    const startBtn = document.getElementById('startCamera');
+    const stopBtn = document.getElementById('stopCamera');
+    const cameraContainer = document.getElementById('cameraContainer');
+    videoElement = document.getElementById('qrVideo');
 
-    setTimeout(() => {
-        document.getElementById('qr_code_id').value = randomQR;
-        button.innerHTML = originalText;
-        button.disabled = false;
+    // Show camera container
+    cameraContainer.style.display = 'block';
+    startBtn.classList.add('d-none');
+    stopBtn.classList.remove('d-none');
 
-        // Show success message
-        const input = document.getElementById('qr_code_id');
-        input.focus();
-        input.select();
-
-        // Optional: Auto-submit after a short delay
-        setTimeout(() => {
-            if (confirm('QR Code detected: ' + randomQR + '. Submit for verification?')) {
-                document.querySelector('form').submit();
+    // Initialize QR Scanner
+    if (QrScanner.hasCamera()) {
+        qrScanner = new QrScanner(
+            videoElement,
+            result => handleQRResult(result.data),
+            {
+                onDecodeError: error => {
+                    // Silently handle decode errors (normal when no QR code is visible)
+                },
+                highlightScanRegion: true,
+                highlightCodeOutline: true,
             }
-        }, 500);
-    }, 2000);
+        );
+
+        qrScanner.start().then(() => {
+            console.log('QR Scanner started successfully');
+        }).catch(error => {
+            console.error('Failed to start QR Scanner:', error);
+            alert('Failed to access camera. Please ensure camera permissions are granted.');
+            stopCamera();
+        });
+    } else {
+        alert('No camera found on this device.');
+        stopCamera();
+    }
+}
+
+function stopCamera() {
+    const startBtn = document.getElementById('startCamera');
+    const stopBtn = document.getElementById('stopCamera');
+    const cameraContainer = document.getElementById('cameraContainer');
+
+    if (qrScanner) {
+        qrScanner.stop();
+        qrScanner.destroy();
+        qrScanner = null;
+    }
+
+    // Hide camera container
+    cameraContainer.style.display = 'none';
+    startBtn.classList.remove('d-none');
+    stopBtn.classList.add('d-none');
+}
+
+function handleQRResult(qrData) {
+    // Stop the scanner
+    stopCamera();
+
+    // Set the QR code in the input field
+    const input = document.getElementById('qr_code_id');
+    input.value = qrData.toUpperCase();
+    
+    // Process the QR code via API for immediate response
+    processQRCode(qrData.toUpperCase());
+}
+
+function processQRCode(qrCodeId) {
+    // Show processing state
+    const form = document.querySelector('form');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+    submitBtn.disabled = true;
+
+    // Send AJAX request to process QR code
+    fetch('/api/process_qr', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ qr_code_id: qrCodeId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+
+        if (data.success) {
+            // Show success message and user details
+            showUserDetails(data.user, data.message);
+        } else {
+            // Show error message
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        console.error('Error:', error);
+        showAlert('Failed to process QR code. Please try again.', 'danger');
+    });
+}
+
+function showUserDetails(user, message) {
+    // Create or update user details display
+    let userDetailsDiv = document.getElementById('userDetails');
+    if (!userDetailsDiv) {
+        userDetailsDiv = document.createElement('div');
+        userDetailsDiv.id = 'userDetails';
+        userDetailsDiv.className = 'mt-4';
+        document.querySelector('.card-body').appendChild(userDetailsDiv);
+    }
+
+    const statusClass = user.status === 'allowed' ? 'success' : 'danger';
+    const checkInStatus = user.is_checked_in ? 'Checked In' : 'Checked Out';
+    const checkInIcon = user.is_checked_in ? 'sign-in-alt' : 'sign-out-alt';
+
+    userDetailsDiv.innerHTML = `
+        <div class="alert alert-${statusClass}" role="alert">
+            <h5 class="alert-heading">
+                <i class="fas fa-${statusClass === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                ${message}
+            </h5>
+        </div>
+        <div class="card border-${statusClass}">
+            <div class="card-header bg-${statusClass} text-white">
+                <h5 class="mb-0">User Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4 text-center">
+                        ${user.picture_url ? 
+                            `<img src="${user.picture_url}" alt="${user.full_name}" class="img-fluid rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover;">` :
+                            `<div class="rounded-circle bg-secondary mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 120px; height: 120px;">
+                                <i class="fas fa-user fa-3x text-white"></i>
+                            </div>`
+                        }
+                    </div>
+                    <div class="col-md-8">
+                        <h4 class="mb-1">${user.full_name}</h4>
+                        <p class="text-muted mb-2">ID: <code>${user.qr_code_id}</code></p>
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <strong>Status:</strong>
+                                <span class="badge bg-${statusClass} ms-1">${user.status.charAt(0).toUpperCase() + user.status.slice(1)}</span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Current:</strong>
+                                <span class="badge bg-info ms-1">
+                                    <i class="fas fa-${checkInIcon} me-1"></i>${checkInStatus}
+                                </span>
+                            </div>
+                        </div>
+                        ${user.qr_code_url ? 
+                            `<div class="mt-3">
+                                <a href="${user.qr_code_url}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-qrcode me-1"></i>View QR Code
+                                </a>
+                            </div>` : ''
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Scroll to user details
+    userDetailsDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+function showAlert(message, type) {
+    // Create alert element
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    // Insert after the form
+    const form = document.querySelector('form');
+    form.parentNode.insertBefore(alertDiv, form.nextSibling);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv && alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
 }
 
 // Auto-focus on QR code input when page loads
@@ -231,6 +412,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.select();
             }
         });
+    }
+});
+
+// Clean up camera when page is unloaded
+window.addEventListener('beforeunload', function() {
+    if (qrScanner) {
+        qrScanner.stop();
+        qrScanner.destroy();
     }
 });
 </script>
