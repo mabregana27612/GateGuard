@@ -162,7 +162,8 @@ def api_process_qr():
             'qr_code_id': user_data.qr_code_id,
             'status': user_data.status,
             'is_checked_in': user_data.is_checked_in,
-            'picture_url': f"/static/uploads/{user_data.picture_filename}" if user_data.picture_filename else None
+            'picture_url': f"/static/uploads/{user_data.picture_filename}" if user_data.picture_filename else None,
+            'qr_code_url': f"/static/qr_codes/{user_data.qr_code_filename}" if user_data.qr_code_filename else None
         }
     
     return jsonify(response_data)

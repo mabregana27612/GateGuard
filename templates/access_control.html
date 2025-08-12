@@ -22,7 +22,7 @@
                         Enter your QR Code ID below to verify access or use the camera scanner.
                     </p>
                 </div>
-                
+
                 <!-- QR Code Input Form -->
                 <form method="POST" action="{{ url_for('access_control') }}">
                     <div class="mb-4">
@@ -31,10 +31,10 @@
                             <span class="input-group-text">
                                 <i class="fas fa-qrcode"></i>
                             </span>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="qr_code_id" 
-                                   name="qr_code_id" 
+                            <input type="text"
+                                   class="form-control"
+                                   id="qr_code_id"
+                                   name="qr_code_id"
                                    placeholder="Enter or scan QR Code ID"
                                    autocomplete="off"
                                    autofocus
@@ -45,13 +45,13 @@
                             Present your QR code to the camera or enter the ID manually
                         </div>
                     </div>
-                    
+
                     <button type="submit" class="btn btn-primary btn-lg w-100">
                         <i class="fas fa-check-circle me-2"></i>
                         Verify Access
                     </button>
                 </form>
-                
+
                 <!-- Camera Scanner Section -->
                 <div class="mt-4">
                     <hr>
@@ -71,7 +71,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Access Instructions -->
         <div class="card mt-4">
             <div class="card-body">
@@ -123,6 +123,68 @@
         {% endif %}
     </div>
 </div>
+
+{% if scanned_user %}
+        <div class="row mt-4">
+            <div class="col-md-8 mx-auto">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-user me-2"></i>
+                            Scanned User Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 text-center">
+                                {% if scanned_user.picture_filename %}
+                                    <img src="{{ url_for('static', filename='uploads/' + scanned_user.picture_filename) }}"
+                                         alt="{{ scanned_user.full_name }}"
+                                         class="img-fluid rounded-circle mb-3"
+                                         style="width: 120px; height: 120px; object-fit: cover;">
+                                {% else %}
+                                    <div class="rounded-circle bg-secondary mx-auto mb-3 d-flex align-items-center justify-content-center"
+                                         style="width: 120px; height: 120px;">
+                                        <i class="fas fa-user fa-3x text-white"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8">
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <h4 class="mb-1">{{ scanned_user.full_name }}</h4>
+                                        <p class="text-muted mb-0">ID: <code>{{ scanned_user.qr_code_id }}</code></p>
+                                    </div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-sm-6">
+                                        <strong>Access Status:</strong><br>
+                                        <span class="badge bg-{{ 'success' if scanned_user.status == 'allowed' else 'danger' }} fs-6">
+                                            <i class="fas fa-{{ 'check' if scanned_user.status == 'allowed' else 'ban' }} me-1"></i>
+                                            {{ scanned_user.status.title() }}
+                                        </span>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <strong>Current Status:</strong><br>
+                                        <span class="badge bg-{{ 'warning' if scanned_user.is_checked_in else 'info' }} fs-6">
+                                            <i class="fas fa-{{ 'sign-in-alt' if scanned_user.is_checked_in else 'sign-out-alt' }} me-1"></i>
+                                            {{ 'Checked In' if scanned_user.is_checked_in else 'Checked Out' }}
+                                        </span>
+                                    </div>
+                                </div>
+                                {% if scanned_user.status != 'allowed' %}
+                                <div class="alert alert-danger mt-3" role="alert">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>Access Denied!</strong> This user is currently {{ scanned_user.status }}.
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -131,23 +193,23 @@ function simulateQRScan() {
     // Simulate QR code scanning with demo IDs
     const demoQRCodes = ['USER001', 'USER002', 'EMP123', 'GUEST456', 'ADMIN001'];
     const randomQR = demoQRCodes[Math.floor(Math.random() * demoQRCodes.length)];
-    
+
     // Show scanning animation
     const button = event.target;
     const originalText = button.innerHTML;
     button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Scanning...';
     button.disabled = true;
-    
+
     setTimeout(() => {
         document.getElementById('qr_code_id').value = randomQR;
         button.innerHTML = originalText;
         button.disabled = false;
-        
+
         // Show success message
         const input = document.getElementById('qr_code_id');
         input.focus();
         input.select();
-        
+
         // Optional: Auto-submit after a short delay
         setTimeout(() => {
             if (confirm('QR Code detected: ' + randomQR + '. Submit for verification?')) {
@@ -162,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const input = document.getElementById('qr_code_id');
     if (input) {
         input.focus();
-        
+
         // Clear input on focus for better UX
         input.addEventListener('focus', function() {
             if (this.value) {

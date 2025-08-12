@@ -6,11 +6,24 @@ from PIL import Image
 from app import db
 from models import SecurityUser, ActivityLog
 
+import qrcode
+from io import BytesIO
+import base64
+import os
+import uuid
+from datetime import datetime
+from werkzeug.utils import secure_filename
+from PIL import Image
+from models import SecurityUser, ActivityLog
+from app import db
+
 class SecurityService:
     def __init__(self):
         self.upload_folder = 'static/uploads'
+        self.qr_folder = 'static/qr_codes'
         self.allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
         os.makedirs(self.upload_folder, exist_ok=True)
+        os.makedirs(self.qr_folder, exist_ok=True)
     
     def allowed_file(self, filename):
         return '.' in filename and \
@@ -36,6 +49,26 @@ class SecurityService:
         
         return unique_filename
     
+    def generate_qr_code(self, qr_code_id, user_name):
+        """Generate QR code for user"""
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_code_id)
+        qr.make(fit=True)
+        
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Save QR code
+        qr_filename = f"qr_{qr_code_id}.png"
+        qr_path = os.path.join(self.qr_folder, qr_filename)
+        qr_img.save(qr_path)
+        
+        return qr_filename
+    
     def add_user(self, full_name, qr_code_id, status="allowed", picture_file=None):
         """Add a new security user"""
         # Check if QR code already exists
@@ -48,12 +81,16 @@ class SecurityService:
         if picture_file:
             picture_filename = self.save_picture(picture_file)
         
+        # Generate QR code
+        qr_filename = self.generate_qr_code(qr_code_id.upper(), full_name)
+        
         # Create new user
         user = SecurityUser(
             full_name=full_name,
             qr_code_id=qr_code_id.upper(),
             status=status,
-            picture_filename=picture_filename
+            picture_filename=picture_filename,
+            qr_code_filename=qr_filename
         )
         
         try:

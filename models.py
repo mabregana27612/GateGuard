@@ -40,6 +40,7 @@ class SecurityUser(db.Model):
     qr_code_id = db.Column(db.String, unique=True, nullable=False)
     status = db.Column(db.String, default='allowed')  # allowed, banned
     picture_filename = db.Column(db.String, nullable=True)
+    qr_code_filename = db.Column(db.String, nullable=True)
     biometric_template = db.Column(db.Text, nullable=True)  # For future face recognition
     is_checked_in = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.now)

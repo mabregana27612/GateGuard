@@ -31,7 +31,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card bg-success text-white">
             <div class="card-body">
@@ -47,7 +47,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card bg-danger text-white">
             <div class="card-body">
@@ -63,7 +63,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card bg-info text-white">
             <div class="card-body">
@@ -99,7 +99,7 @@
                 </button>
             </div>
         </form>
-        
+
         {% if users %}
         <div class="table-responsive">
             <table class="table table-hover">
@@ -116,21 +116,36 @@
                     {% for user in users %}
                     <tr>
                         <td>
-                            <strong>{{ user.full_name }}</strong>
+                            <div class="d-flex align-items-center">
+                                {% if user.picture_filename %}
+                                    <img src="{{ url_for('static', filename='uploads/' + user.picture_filename) }}" 
+                                         alt="{{ user.full_name }}" 
+                                         class="rounded-circle me-2" 
+                                         style="width: 40px; height: 40px; object-fit: cover;">
+                                {% else %}
+                                    <div class="rounded-circle bg-secondary me-2 d-flex align-items-center justify-content-center" 
+                                         style="width: 40px; height: 40px;">
+                                        <i class="fas fa-user text-white"></i>
+                                    </div>
+                                {% endif %}
+                                {{ user.full_name }}
+                            </div>
                         </td>
                         <td>
-                            <code>{{ user.qr_code_id }}</code>
+                            <div class="d-flex align-items-center">
+                                <code class="me-2">{{ user.qr_code_id }}</code>
+                                {% if user.qr_code_filename %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                                            data-bs-toggle="modal" data-bs-target="#qrModal{{ loop.index }}">
+                                        <i class="fas fa-qrcode"></i>
+                                    </button>
+                                {% endif %}
+                            </div>
                         </td>
                         <td>
-                            {% if user.status == 'allowed' %}
-                                <span class="badge bg-success">
-                                    <i class="fas fa-check me-1"></i>Allowed
-                                </span>
-                            {% else %}
-                                <span class="badge bg-danger">
-                                    <i class="fas fa-ban me-1"></i>Banned
-                                </span>
-                            {% endif %}
+                            <span class="badge bg-{{ 'success' if user.status == 'allowed' else 'danger' }}">
+                                {{ user.status.title() }}
+                            </span>
                         </td>
                         <td>
                             {% if user.is_checked_in %}
@@ -149,7 +164,7 @@
                                         onclick="editUser('{{ user.qr_code_id }}', '{{ user.full_name }}', '{{ user.status }}')">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                
+
                                 {% if user.status == 'allowed' %}
                                     <a href="{{ url_for('change_user_status', qr_code_id=user.qr_code_id, status='banned') }}" 
                                        class="btn btn-sm btn-outline-warning"
@@ -163,7 +178,7 @@
                                         <i class="fas fa-check"></i>
                                     </a>
                                 {% endif %}
-                                
+
                                 <a href="{{ url_for('delete_user', qr_code_id=user.qr_code_id) }}" 
                                    class="btn btn-sm btn-outline-danger"
                                    onclick="return confirm('Delete this user? This action cannot be undone.')">
@@ -240,7 +255,7 @@
                 <h5 class="modal-title">Add New User</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form action="{{ url_for('add_user') }}" method="POST">
+            <form action="{{ url_for('add_user') }}" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="full_name" class="form-label">Full Name *</label>
@@ -257,6 +272,10 @@
                             <option value="allowed">Allowed</option>
                             <option value="banned">Banned</option>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="picture" class="form-label">Profile Picture</label>
+                        <input class="form-control" type="file" id="picture" name="picture" accept="image/*">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -276,7 +295,7 @@
                 <h5 class="modal-title">Edit User</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="editUserForm" method="POST">
+            <form id="editUserForm" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="edit_full_name" class="form-label">Full Name *</label>
@@ -289,6 +308,10 @@
                             <option value="banned">Banned</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <label for="edit_picture" class="form-label">Profile Picture</label>
+                        <input class="form-control" type="file" id="edit_picture" name="picture" accept="image/*">
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -298,6 +321,37 @@
         </div>
     </div>
 </div>
+
+<!-- QR Code Modals -->
+{% for user in users %}
+<div class="modal fade" id="qrModal{{ loop.index }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">QR Code - {{ user.full_name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                {% if user.qr_code_filename %}
+                    <img src="{{ url_for('static', filename='qr_codes/' + user.qr_code_filename) }}" 
+                         alt="QR Code for {{ user.full_name }}" 
+                         class="img-fluid mb-3" 
+                         style="max-width: 300px;">
+                    <p class="text-muted">QR Code ID: <code>{{ user.qr_code_id }}</code></p>
+                    <a href="{{ url_for('static', filename='qr_codes/' + user.qr_code_filename) }}" 
+                       download="qr_{{ user.qr_code_id }}.png" 
+                       class="btn btn-primary">
+                        <i class="fas fa-download me-1"></i> Download QR Code
+                    </a>
+                {% else %}
+                    <p>QR Code not available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
 {% endblock %}
 
 {% block scripts %}
@@ -306,7 +360,7 @@ function editUser(qrCodeId, fullName, status) {
     document.getElementById('editUserForm').action = '/admin/update_user/' + qrCodeId;
     document.getElementById('edit_full_name').value = fullName;
     document.getElementById('edit_status').value = status;
-    
+
     var editModal = new bootstrap.Modal(document.getElementById('editUserModal'));
     editModal.show();
 }

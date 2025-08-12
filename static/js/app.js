@@ -156,6 +156,12 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // QR Code Scanner Simulation
+function startQRScanner() {
+    const qrInput = document.getElementById('qr_code_id');
+    if (qrInput) {
+        qrInput.focus();
+    }
+}
 function simulateQRScan() {
     return new Promise(function(resolve, reject) {
         // Simulate scanning delay
