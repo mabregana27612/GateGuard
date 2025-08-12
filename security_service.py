@@ -57,6 +57,171 @@ class SecurityService:
             box_size=10,
             border=4,
         )
+        
+        qr.add_data(qr_code_id)
+        qr.make(fit=True)
+        
+        # Create QR code image
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Save to file
+        filename = f"qr_{qr_code_id}.png"
+        filepath = os.path.join(self.qr_folder, filename)
+        img.save(filepath)
+        
+        return filename
+    
+    def analyze_csv(self, csv_file):
+        """Analyze CSV file and return statistics"""
+        import csv
+        from io import StringIO
+        
+        # Read CSV content
+        csv_content = csv_file.read().decode('utf-8')
+        csv_file.seek(0)  # Reset file pointer
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(StringIO(csv_content))
+        
+        # Validate headers
+        required_headers = ['full_name', 'qr_code_id']
+        headers = csv_reader.fieldnames
+        
+        if not headers or not all(header in headers for header in required_headers):
+            return {
+                'success': False,
+                'message': f'CSV must contain columns: {", ".join(required_headers)}. Optional: status'
+            }
+        
+        # Get existing QR codes
+        existing_qr_codes = set(user.qr_code_id for user in SecurityUser.query.all())
+        
+        # Analyze records
+        total_records = 0
+        new_records = 0
+        duplicate_records = 0
+        error_records = 0
+        errors = []
+        preview_data = []
+        
+        for row_num, row in enumerate(csv_reader, start=2):  # Start from 2 (after header)
+            total_records += 1
+            
+            full_name = row.get('full_name', '').strip()
+            qr_code_id = row.get('qr_code_id', '').strip()
+            status = row.get('status', 'allowed').strip().lower()
+            
+            # Validate required fields
+            if not full_name or not qr_code_id:
+                error_records += 1
+                errors.append(f"Row {row_num}: Missing full_name or qr_code_id")
+                continue
+            
+            # Validate status
+            if status not in ['allowed', 'banned']:
+                status = 'allowed'  # Default to allowed
+            
+            # Check for duplicates
+            import_status = 'New'
+            if qr_code_id in existing_qr_codes:
+                duplicate_records += 1
+                import_status = 'Duplicate'
+            else:
+                new_records += 1
+            
+            # Add to preview (first 10 new records only)
+            if len(preview_data) < 10 and import_status == 'New':
+                preview_data.append({
+                    'full_name': full_name,
+                    'qr_code_id': qr_code_id,
+                    'status': status,
+                    'import_status': import_status
+                })
+        
+        return {
+            'success': True,
+            'total_records': total_records,
+            'new_records': new_records,
+            'duplicate_records': duplicate_records,
+            'error_records': error_records,
+            'errors': errors,
+            'preview': preview_data
+        }
+    
+    def import_csv(self, csv_file):
+        """Import users from CSV file"""
+        import csv
+        from io import StringIO
+        
+        # Read CSV content
+        csv_content = csv_file.read().decode('utf-8')
+        csv_reader = csv.DictReader(StringIO(csv_content))
+        
+        # Get existing QR codes
+        existing_qr_codes = set(user.qr_code_id for user in SecurityUser.query.all())
+        
+        imported_count = 0
+        errors = []
+        
+        try:
+            for row_num, row in enumerate(csv_reader, start=2):
+                full_name = row.get('full_name', '').strip()
+                qr_code_id = row.get('qr_code_id', '').strip()
+                status = row.get('status', 'allowed').strip().lower()
+                
+                # Skip invalid or duplicate records
+                if not full_name or not qr_code_id:
+                    continue
+                
+                if qr_code_id in existing_qr_codes:
+                    continue
+                
+                # Validate status
+                if status not in ['allowed', 'banned']:
+                    status = 'allowed'
+                
+                # Create new user
+                new_user = SecurityUser(
+                    full_name=full_name,
+                    qr_code_id=qr_code_id,
+                    status=status
+                )
+                
+                # Generate QR code
+                qr_filename = self.generate_qr_code(qr_code_id, full_name)
+                new_user.qr_code_filename = qr_filename
+                
+                db.session.add(new_user)
+                imported_count += 1
+                
+                # Add to existing set to prevent duplicates within the same file
+                existing_qr_codes.add(qr_code_id)
+            
+            db.session.commit()
+            
+            # Log the bulk import
+            activity = ActivityLog(
+                qr_code_id='BULK_IMPORT',
+                user_name=f'Admin Import ({imported_count} users)',
+                action='bulk_import',
+                method='CSV',
+                details=f'Imported {imported_count} users via CSV upload'
+            )
+            db.session.add(activity)
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'imported_count': imported_count,
+                'message': f'Successfully imported {imported_count} users'
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            return {
+                'success': False,
+                'message': f'Import failed: {str(e)}'
+            }
         qr.add_data(qr_code_id)
         qr.make(fit=True)
         

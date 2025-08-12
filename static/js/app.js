@@ -240,10 +240,152 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+// CSV Upload Functions
+let csvAnalysisData = null;
+
+function analyzeCSV() {
+    const fileInput = document.getElementById('csv_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showToast('Please select a CSV file first', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    
+    // Show loading
+    document.getElementById('csvAnalytics').style.display = 'none';
+    document.getElementById('importBtn').style.display = 'none';
+    
+    fetch('/admin/analyze_csv', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            csvAnalysisData = data;
+            displayCSVAnalytics(data);
+        } else {
+            showToast(data.message || 'Error analyzing CSV', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error analyzing CSV file', 'error');
+    });
+}
+
+function displayCSVAnalytics(data) {
+    document.getElementById('csvAnalytics').style.display = 'block';
+    
+    // Update stats
+    document.getElementById('totalRecords').textContent = data.total_records;
+    document.getElementById('newRecords').textContent = data.new_records;
+    document.getElementById('duplicateRecords').textContent = data.duplicate_records;
+    document.getElementById('errorRecords').textContent = data.error_records;
+    
+    // Update preview table
+    const tbody = document.getElementById('csvPreviewBody');
+    tbody.innerHTML = '';
+    
+    data.preview.forEach(record => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td>${record.full_name}</td>
+            <td><code>${record.qr_code_id}</code></td>
+            <td><span class="badge bg-${record.status === 'allowed' ? 'success' : 'danger'}">${record.status}</span></td>
+            <td><span class="badge bg-${getStatusBadgeColor(record.import_status)}">${record.import_status}</span></td>
+        `;
+    });
+    
+    // Show errors if any
+    const errorDetails = document.getElementById('errorDetails');
+    const errorList = document.getElementById('errorList');
+    
+    if (data.errors && data.errors.length > 0) {
+        errorDetails.style.display = 'block';
+        errorList.innerHTML = '';
+        data.errors.forEach(error => {
+            const li = document.createElement('li');
+            li.textContent = error;
+            errorList.appendChild(li);
+        });
+    } else {
+        errorDetails.style.display = 'none';
+    }
+    
+    // Show import button if there are new records
+    if (data.new_records > 0) {
+        document.getElementById('importBtn').style.display = 'inline-block';
+        document.getElementById('importCount').textContent = data.new_records;
+    }
+}
+
+function getStatusBadgeColor(status) {
+    switch (status) {
+        case 'New': return 'success';
+        case 'Duplicate': return 'warning';
+        case 'Error': return 'danger';
+        default: return 'secondary';
+    }
+}
+
+function importCSV() {
+    if (!csvAnalysisData) {
+        showToast('Please analyze the CSV first', 'error');
+        return;
+    }
+    
+    const fileInput = document.getElementById('csv_file');
+    const file = fileInput.files[0];
+    
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    
+    // Disable import button
+    const importBtn = document.getElementById('importBtn');
+    importBtn.disabled = true;
+    importBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Importing...';
+    
+    fetch('/admin/import_csv', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`Successfully imported ${data.imported_count} records`, 'success');
+            
+            // Close modal and refresh page
+            const modal = bootstrap.Modal.getInstance(document.getElementById('csvUploadModal'));
+            modal.hide();
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showToast(data.message || 'Import failed', 'error');
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Import ' + csvAnalysisData.new_records + ' Records';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error importing CSV file', 'error');
+        importBtn.disabled = false;
+        importBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Import ' + csvAnalysisData.new_records + ' Records';
+    });
+}
+
 // Export functions for global access
 window.SecurityApp = {
     simulateQRScan: simulateQRScan,
     refreshActivityData: refreshActivityData,
     showToast: showToast,
-    formatTimestamp: formatTimestamp
+    formatTimestamp: formatTimestamp,
+    analyzeCSV: analyzeCSV,
+    importCSV: importCSV
 };

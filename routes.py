@@ -264,6 +264,58 @@ def search_users():
                           stats=stats,
                           search_query=query)
 
+@app.route('/admin/download_csv_template')
+@require_login
+def download_csv_template():
+    """Download CSV template for bulk user import"""
+    template_data = "full_name,qr_code_id,status\n"
+    template_data += "John Doe,USER001,allowed\n"
+    template_data += "Jane Smith,USER002,allowed\n"
+    template_data += "Bob Johnson,USER003,banned\n"
+    
+    response = make_response(template_data)
+    response.headers['Content-Disposition'] = 'attachment; filename=user_import_template.csv'
+    response.headers['Content-Type'] = 'text/csv'
+    
+    logging.info(f"CSV template downloaded by admin {current_user.email}")
+    return response
+
+@app.route('/admin/analyze_csv', methods=['POST'])
+@require_login
+def analyze_csv():
+    """Analyze CSV file before import"""
+    csv_file = request.files.get('csv_file')
+    
+    if not csv_file or not csv_file.filename.endswith('.csv'):
+        return jsonify({'success': False, 'message': 'Please upload a valid CSV file'}), 400
+    
+    try:
+        result = security_service.analyze_csv(csv_file)
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"CSV analysis error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error analyzing CSV file'}), 500
+
+@app.route('/admin/import_csv', methods=['POST'])
+@require_login
+def import_csv():
+    """Import users from CSV file"""
+    csv_file = request.files.get('csv_file')
+    
+    if not csv_file or not csv_file.filename.endswith('.csv'):
+        return jsonify({'success': False, 'message': 'Please upload a valid CSV file'}), 400
+    
+    try:
+        result = security_service.import_csv(csv_file)
+        
+        if result['success']:
+            logging.info(f"CSV import: {result['imported_count']} users imported by admin {current_user.email}")
+        
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"CSV import error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Error importing CSV file'}), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return render_template('403.html', error_message="Page not found"), 404
