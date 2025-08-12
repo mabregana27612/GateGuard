@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Security Access Control{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2">
+        <i class="fas fa-users-cog me-2"></i>
+        Admin Dashboard
+    </h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+        <i class="fas fa-user-plus me-2"></i>
+        Add User
+    </button>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Total Users</h5>
+                        <h2 class="mb-0">{{ stats.total_users }}</h2>
+                    </div>
+                    <div>
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Allowed</h5>
+                        <h2 class="mb-0">{{ stats.allowed_users }}</h2>
+                    </div>
+                    <div>
+                        <i class="fas fa-user-check fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Banned</h5>
+                        <h2 class="mb-0">{{ stats.banned_users }}</h2>
+                    </div>
+                    <div>
+                        <i class="fas fa-user-times fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Checked In</h5>
+                        <h2 class="mb-0">{{ stats.checked_in_users }}</h2>
+                    </div>
+                    <div>
+                        <i class="fas fa-sign-in-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Management -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-users me-2"></i>
+            User Management
+        </h5>
+    </div>
+    <div class="card-body">
+        <!-- Search Form -->
+        <form action="{{ url_for('search_users') }}" method="GET" class="mb-3">
+            <div class="input-group">
+                <input type="text" class="form-control" name="q" placeholder="Search by name or QR Code ID..." value="{{ search_query or '' }}">
+                <button class="btn btn-outline-secondary" type="submit">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </form>
+        
+        {% if users %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Name</th>
+                        <th>QR Code ID</th>
+                        <th>Status</th>
+                        <th>Check-in Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            <strong>{{ user.full_name }}</strong>
+                        </td>
+                        <td>
+                            <code>{{ user.qr_code_id }}</code>
+                        </td>
+                        <td>
+                            {% if user.status == 'allowed' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check me-1"></i>Allowed
+                                </span>
+                            {% else %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-ban me-1"></i>Banned
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_checked_in %}
+                                <span class="badge bg-info">
+                                    <i class="fas fa-sign-in-alt me-1"></i>Checked In
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-sign-out-alt me-1"></i>Checked Out
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" 
+                                        onclick="editUser('{{ user.qr_code_id }}', '{{ user.full_name }}', '{{ user.status }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                
+                                {% if user.status == 'allowed' %}
+                                    <a href="{{ url_for('change_user_status', qr_code_id=user.qr_code_id, status='banned') }}" 
+                                       class="btn btn-sm btn-outline-warning"
+                                       onclick="return confirm('Ban this user?')">
+                                        <i class="fas fa-ban"></i>
+                                    </a>
+                                {% else %}
+                                    <a href="{{ url_for('change_user_status', qr_code_id=user.qr_code_id, status='allowed') }}" 
+                                       class="btn btn-sm btn-outline-success"
+                                       onclick="return confirm('Allow this user?')">
+                                        <i class="fas fa-check"></i>
+                                    </a>
+                                {% endif %}
+                                
+                                <a href="{{ url_for('delete_user', qr_code_id=user.qr_code_id) }}" 
+                                   class="btn btn-sm btn-outline-danger"
+                                   onclick="return confirm('Delete this user? This action cannot be undone.')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+            <i class="fas fa-users fa-3x mb-3"></i>
+            <h5>No users found</h5>
+            <p>{% if search_query %}No users match your search criteria.{% else %}Start by adding your first user.{% endif %}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-clock me-2"></i>
+            Recent Activity
+        </h5>
+        <a href="{{ url_for('reports') }}" class="btn btn-sm btn-outline-primary">
+            View All
+        </a>
+    </div>
+    <div class="card-body">
+        {% if recent_activity %}
+        <div class="activity-list">
+            {% for activity in recent_activity %}
+            <div class="activity-item d-flex align-items-center mb-3">
+                <div class="activity-icon me-3">
+                    {% if activity.action == 'check_in' %}
+                        <i class="fas fa-sign-in-alt text-success"></i>
+                    {% elif activity.action == 'check_out' %}
+                        <i class="fas fa-sign-out-alt text-info"></i>
+                    {% else %}
+                        <i class="fas fa-exclamation-triangle text-danger"></i>
+                    {% endif %}
+                </div>
+                <div class="activity-details flex-grow-1">
+                    <div class="fw-bold">{{ activity.user_name }}</div>
+                    <div class="text-muted small">
+                        {{ activity.action.replace('_', ' ').title() }} via {{ activity.method }} - {{ activity.details }}
+                    </div>
+                </div>
+                <div class="activity-time text-muted small">
+                    {{ activity.timestamp.strftime('%H:%M') }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3">
+            <i class="fas fa-clock fa-2x mb-2"></i>
+            <p>No recent activity</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('add_user') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">Full Name *</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="qr_code_id" class="form-label">QR Code ID *</label>
+                        <input type="text" class="form-control" id="qr_code_id" name="qr_code_id" required>
+                        <div class="form-text">Must be unique</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="allowed">Allowed</option>
+                            <option value="banned">Banned</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editUserForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_full_name" class="form-label">Full Name *</label>
+                        <input type="text" class="form-control" id="edit_full_name" name="full_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_status" class="form-label">Status</label>
+                        <select class="form-select" id="edit_status" name="status">
+                            <option value="allowed">Allowed</option>
+                            <option value="banned">Banned</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editUser(qrCodeId, fullName, status) {
+    document.getElementById('editUserForm').action = '/admin/update_user/' + qrCodeId;
+    document.getElementById('edit_full_name').value = fullName;
+    document.getElementById('edit_status').value = status;
+    
+    var editModal = new bootstrap.Modal(document.getElementById('editUserModal'));
+    editModal.show();
+}
+</script>
+{% endblock %}

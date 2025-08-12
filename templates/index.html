@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome - Security Access Control{% endblock %}
+
+{% block body_class %}landing-page{% endblock %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="hero-section">
+    <div class="container">
+        <div class="row min-vh-100 align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold mb-4">
+                    <i class="fas fa-shield-alt text-primary me-3"></i>
+                    Secure Access Control
+                </h1>
+                <p class="lead mb-4">
+                    Professional security access control system with QR code scanning, 
+                    user management, and comprehensive activity tracking.
+                </p>
+                
+                <div class="d-flex flex-column flex-sm-row gap-3">
+                    <a href="{{ url_for('access_control') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-qrcode me-2"></i>
+                        Scan QR Code
+                    </a>
+                    <a href="{{ url_for('replit_auth.login') }}" class="btn btn-outline-dark btn-lg">
+                        <i class="fas fa-users-cog me-2"></i>
+                        Admin Access
+                    </a>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-lg">
+                    <div class="card-body p-5">
+                        <h3 class="card-title mb-4">
+                            <i class="fas fa-key text-warning me-2"></i>
+                            Quick Access
+                        </h3>
+                        
+                        <!-- Quick Access Form -->
+                        <form action="{{ url_for('access_control') }}" method="POST">
+                            <div class="mb-3">
+                                <label for="qr_code_id" class="form-label">QR Code ID</label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-qrcode"></i>
+                                    </span>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="qr_code_id" 
+                                           name="qr_code_id" 
+                                           placeholder="Enter your QR Code ID"
+                                           required>
+                                </div>
+                                <div class="form-text">
+                                    Enter your QR Code ID for quick access verification
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success btn-lg w-100">
+                                <i class="fas fa-sign-in-alt me-2"></i>
+                                Verify Access
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="features-section bg-light py-5">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col">
+                <h2 class="display-6 fw-bold">Security Features</h2>
+                <p class="lead text-muted">Advanced access control with comprehensive monitoring</p>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon mb-3">
+                            <i class="fas fa-qrcode fa-3x text-primary"></i>
+                        </div>
+                        <h5 class="card-title">QR Code Scanning</h5>
+                        <p class="card-text">
+                            Fast and secure QR code-based access control with real-time verification.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon mb-3">
+                            <i class="fas fa-users-cog fa-3x text-success"></i>
+                        </div>
+                        <h5 class="card-title">User Management</h5>
+                        <p class="card-text">
+                            Complete user database with status management and administrative controls.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon mb-3">
+                            <i class="fas fa-chart-bar fa-3x text-info"></i>
+                        </div>
+                        <h5 class="card-title">Activity Tracking</h5>
+                        <p class="card-text">
+                            Comprehensive logging and reporting of all access attempts and activities.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
