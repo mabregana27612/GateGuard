@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}My QR Code - Security Access Control{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-lg">
+            <div class="card-header bg-success text-white text-center">
+                <h3 class="mb-0">
+                    <i class="fas fa-qrcode me-2"></i>
+                    My Access QR Code
+                </h3>
+            </div>
+            <div class="card-body p-5 text-center">
+                <!-- User Info -->
+                <div class="mb-4">
+                    {% if user.profile_picture %}
+                    <img src="{{ url_for('static', filename=user.profile_picture) }}" 
+                         alt="Profile Picture" 
+                         class="rounded-circle mb-3" 
+                         style="width: 80px; height: 80px; object-fit: cover;">
+                    {% else %}
+                    <div class="bg-secondary rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" 
+                         style="width: 80px; height: 80px;">
+                        <i class="fas fa-user fa-2x text-white"></i>
+                    </div>
+                    {% endif %}
+                    <h4 class="mb-1">{{ user.full_name }}</h4>
+                    <p class="text-muted mb-0">{{ user.qr_code_id }}</p>
+                </div>
+                
+                <!-- QR Code -->
+                <div class="qr-code-display mb-4">
+                    <div class="border rounded p-3 bg-white d-inline-block">
+                        <img src="{{ url_for('qr_code_image') }}" 
+                             alt="QR Code" 
+                             class="img-fluid"
+                             style="max-width: 300px; width: 100%;"
+                             id="qrCodeImage">
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center mb-4">
+                    <button class="btn btn-primary" onclick="downloadQRCode()">
+                        <i class="fas fa-download me-2"></i>
+                        Download QR Code
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="printQRCode()">
+                        <i class="fas fa-print me-2"></i>
+                        Print QR Code
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="shareQRCode()">
+                        <i class="fas fa-share me-2"></i>
+                        Share
+                    </button>
+                </div>
+                
+                <!-- Instructions -->
+                <div class="alert alert-info text-start">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-info-circle me-2"></i>
+                        How to Use Your QR Code
+                    </h6>
+                    <ul class="mb-0">
+                        <li>Present this QR code at access control points</li>
+                        <li>The system will automatically check you in or out</li>
+                        <li>Keep your QR code secure and don't share it</li>
+                        <li>If you lose access, contact the administrator</li>
+                    </ul>
+                </div>
+                
+                <!-- Back Button -->
+                <a href="{{ url_for('client_profile') }}" class="btn btn-outline-dark">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Back to Profile
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print-specific styles -->
+<style>
+@media print {
+    .navbar, .btn, .alert, .card-header {
+        display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .card-body {
+        padding: 0 !important;
+    }
+    
+    #qrCodeImage {
+        max-width: 400px !important;
+    }
+    
+    body {
+        background: white !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadQRCode() {
+    const link = document.createElement('a');
+    link.href = '{{ url_for("qr_code_image") }}';
+    link.download = 'qr_code_{{ user.qr_code_id }}_{{ user.full_name|replace(" ", "_") }}.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    SecurityApp.showToast('QR Code downloaded successfully!', 'success');
+}
+
+function printQRCode() {
+    window.print();
+}
+
+function shareQRCode() {
+    if (navigator.share) {
+        // Use Web Share API if available
+        fetch('{{ url_for("qr_code_image") }}')
+            .then(response => response.blob())
+            .then(blob => {
+                const file = new File([blob], 'my_qr_code.png', { type: 'image/png' });
+                navigator.share({
+                    title: 'My Access QR Code',
+                    text: 'My personal QR code for {{ user.full_name }}',
+                    files: [file]
+                });
+            })
+            .catch(error => {
+                console.error('Error sharing QR code:', error);
+                fallbackShare();
+            });
+    } else {
+        fallbackShare();
+    }
+}
+
+function fallbackShare() {
+    // Fallback: copy QR code URL to clipboard
+    const qrCodeUrl = window.location.origin + '{{ url_for("qr_code_image") }}';
+    navigator.clipboard.writeText(qrCodeUrl).then(() => {
+        SecurityApp.showToast('QR Code URL copied to clipboard!', 'success');
+    }).catch(() => {
+        SecurityApp.showToast('Unable to share QR code', 'error');
+    });
+}
+
+// Auto-refresh QR code every 5 minutes to ensure it's up to date
+setInterval(function() {
+    const qrImage = document.getElementById('qrCodeImage');
+    const currentSrc = qrImage.src;
+    qrImage.src = currentSrc + '?' + new Date().getTime();
+}, 5 * 60 * 1000);
+</script>
+{% endblock %}

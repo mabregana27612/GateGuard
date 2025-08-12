@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile - Security Access Control{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Profile Info -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user me-2"></i>
+                    Profile Information
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                {% if user.profile_picture %}
+                <img src="{{ url_for('static', filename=user.profile_picture) }}" 
+                     alt="Profile Picture" 
+                     class="rounded-circle mb-3" 
+                     style="width: 120px; height: 120px; object-fit: cover;">
+                {% else %}
+                <div class="bg-secondary rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" 
+                     style="width: 120px; height: 120px;">
+                    <i class="fas fa-user fa-3x text-white"></i>
+                </div>
+                {% endif %}
+                
+                <h4 class="card-title">{{ user.full_name }}</h4>
+                <p class="text-muted">@{{ user.username }}</p>
+                <p class="text-muted">{{ user.email }}</p>
+                
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('edit_profile') }}" class="btn btn-primary">
+                        <i class="fas fa-edit me-2"></i>
+                        Edit Profile
+                    </a>
+                    <a href="{{ url_for('client_logout') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-sign-out-alt me-2"></i>
+                        Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Account Status -->
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title">Account Status</h6>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            {% if user.status == 'allowed' %}
+                                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                <div class="fw-bold text-success">Active</div>
+                            {% else %}
+                                <i class="fas fa-ban fa-2x text-danger mb-2"></i>
+                                <div class="fw-bold text-danger">{{ user.status|title }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        {% if user.is_checked_in %}
+                            <i class="fas fa-sign-in-alt fa-2x text-info mb-2"></i>
+                            <div class="fw-bold text-info">Checked In</div>
+                        {% else %}
+                            <i class="fas fa-sign-out-alt fa-2x text-secondary mb-2"></i>
+                            <div class="fw-bold text-secondary">Checked Out</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- QR Code Section -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-qrcode me-2"></i>
+                    My QR Code
+                </h5>
+                <a href="{{ url_for('my_qr_code') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-expand me-1"></i>
+                    Full View
+                </a>
+            </div>
+            <div class="card-body text-center">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>QR Code with Profile Picture</h6>
+                        <div class="qr-code-container mb-3">
+                            <img src="{{ url_for('qr_code_image') }}" 
+                                 alt="QR Code" 
+                                 class="img-fluid border rounded"
+                                 style="max-width: 200px;">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>QR Code Information</h6>
+                        <div class="text-start">
+                            <div class="mb-3">
+                                <strong>QR Code ID:</strong>
+                                <div class="input-group mt-1">
+                                    <input type="text" 
+                                           class="form-control" 
+                                           value="{{ user.qr_code_id }}" 
+                                           readonly
+                                           id="qrCodeId">
+                                    <button class="btn btn-outline-secondary" 
+                                            type="button" 
+                                            onclick="copyToClipboard('qrCodeId')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Created:</strong>
+                                <div class="text-muted">{{ user.created_at.strftime('%B %d, %Y') }}</div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>How to use:</strong><br>
+                                Present this QR code at access points for automatic check-in/check-out.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-bolt me-2"></i>
+                    Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <a href="{{ url_for('access_control') }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-door-open me-2"></i>
+                            Test Access
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-success w-100" onclick="downloadQRCode()">
+                            <i class="fas fa-download me-2"></i>
+                            Download QR
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-info w-100" onclick="printQRCode()">
+                            <i class="fas fa-print me-2"></i>
+                            Print QR
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Instructions -->
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-question-circle me-2"></i>
+                    How to Access
+                </h6>
+                <ol class="mb-0">
+                    <li class="mb-2">Present your QR code to the scanner at access points</li>
+                    <li class="mb-2">Your first scan will check you in</li>
+                    <li class="mb-2">Your next scan will check you out</li>
+                    <li>Keep your QR code secure and don't share it with others</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    element.select();
+    element.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(element.value);
+    
+    // Show feedback
+    SecurityApp.showToast('QR Code ID copied to clipboard!', 'success');
+}
+
+function downloadQRCode() {
+    const link = document.createElement('a');
+    link.href = '{{ url_for("qr_code_image") }}';
+    link.download = 'my_qr_code_{{ user.qr_code_id }}.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    SecurityApp.showToast('QR Code downloaded!', 'success');
+}
+
+function printQRCode() {
+    const qrWindow = window.open('{{ url_for("my_qr_code") }}', '_blank');
+    qrWindow.addEventListener('load', function() {
+        qrWindow.print();
+    });
+}
+</script>
+{% endblock %}
