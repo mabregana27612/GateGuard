@@ -21,25 +21,13 @@
                     user management, and comprehensive activity tracking.
                 </p>
                 
-                <div class="d-flex flex-column flex-sm-row gap-3 mb-4">
+                <div class="d-flex flex-column flex-sm-row gap-3">
                     <a href="{{ url_for('access_control') }}" class="btn btn-primary btn-lg">
                         <i class="fas fa-qrcode me-2"></i>
                         Scan QR Code
                     </a>
-                    <a href="{{ url_for('register') }}" class="btn btn-success btn-lg">
-                        <i class="fas fa-user-plus me-2"></i>
-                        Get QR Code
-                    </a>
-                </div>
-                
-                <div class="d-flex flex-column flex-sm-row gap-2 justify-content-start">
-                    <small class="text-muted me-3">Already have an account?</small>
-                    <a href="{{ url_for('client_login') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-sign-in-alt me-1"></i>
-                        User Login
-                    </a>
-                    <a href="{{ url_for('replit_auth.login') }}" class="btn btn-outline-dark">
-                        <i class="fas fa-users-cog me-1"></i>
+                    <a href="{{ url_for('replit_auth.login') }}" class="btn btn-outline-dark btn-lg">
+                        <i class="fas fa-users-cog me-2"></i>
                         Admin Access
                     </a>
                 </div>

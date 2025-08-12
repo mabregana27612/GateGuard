@@ -1,20 +1,11 @@
-from flask import render_template, request, redirect, url_for, flash, make_response, session, send_file, jsonify
-from flask_login import current_user, login_user, logout_user, login_required
+from flask import render_template, request, redirect, url_for, flash, make_response, session
+from flask_login import current_user
 from datetime import datetime
 import logging
-import os
-import uuid
-from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash
-import qrcode
-from PIL import Image
-import io
-import base64
 
 from app import app, db
 from replit_auth import require_login, make_replit_blueprint
 from data_store import security_store
-from models import ClientUser
 
 # Register Replit Auth blueprint
 app.register_blueprint(make_replit_blueprint(), url_prefix="/auth")
@@ -26,14 +17,9 @@ def make_session_permanent():
 
 @app.route('/')
 def index():
-    """Landing page with appropriate redirects based on user type"""
+    """Landing page for logged out users, access control for logged in users"""
     if current_user.is_authenticated:
-        # Check if it's a client user (has username attribute)
-        if hasattr(current_user, 'username'):
-            return redirect(url_for('client_profile'))
-        else:
-            # Admin user - redirect to admin dashboard
-            return redirect(url_for('admin_dashboard'))
+        return render_template('access_control.html', user=current_user)
     return render_template('index.html')
 
 @app.route('/admin')
@@ -139,46 +125,22 @@ def change_user_status(qr_code_id, status):
 
 @app.route('/access', methods=['GET', 'POST'])
 def access_control():
-    """Access control page - QR code scanning for both admin and client users"""
+    """Access control page - QR code scanning simulation"""
     if request.method == 'POST':
-        qr_code_id = request.form.get('qr_code_id', '').strip().upper()
+        qr_code_id = request.form.get('qr_code_id', '').strip()
         
         if not qr_code_id:
             flash('Please enter a QR Code ID', 'warning')
             return render_template('access_control.html', user=current_user)
         
-        # First check in security store (existing system)
         success, message = security_store.process_access_attempt(qr_code_id)
         
         if success:
             flash(message, 'success')
             logging.info(f"Access granted: {qr_code_id}")
-            return render_template('access_control.html', user=current_user)
-        
-        # If not found in security store, check client users
-        client_user = ClientUser.query.filter_by(qr_code_id=qr_code_id).first()
-        
-        if client_user:
-            if client_user.status != 'allowed':
-                flash(f'Access Denied: User is {client_user.status}', 'danger')
-                logging.warning(f"Access denied: {qr_code_id} - User status: {client_user.status}")
-                return render_template('access_control.html', user=current_user)
-            
-            # Toggle check-in status
-            action = "check_out" if client_user.is_checked_in else "check_in"
-            client_user.is_checked_in = not client_user.is_checked_in
-            
-            try:
-                db.session.commit()
-                flash(f'Access Granted: {action.replace("_", " ").title()} successful for {client_user.full_name}', 'success')
-                logging.info(f"Access granted: {qr_code_id} - {action} for {client_user.full_name}")
-            except Exception as e:
-                db.session.rollback()
-                logging.error(f"Database error during access control: {e}")
-                flash('System error during access verification', 'danger')
         else:
-            flash('Access Denied: Invalid QR Code', 'danger')
-            logging.warning(f"Access denied: {qr_code_id} - Invalid QR Code")
+            flash(message, 'danger')
+            logging.warning(f"Access denied: {qr_code_id} - {message}")
     
     return render_template('access_control.html', user=current_user)
 
@@ -266,233 +228,3 @@ def not_found(error):
 def internal_error(error):
     logging.error(f"Internal server error: {error}")
     return render_template('403.html', error_message="Internal server error"), 500
-
-# Configure upload folder
-UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# Client User Registration and Authentication Routes
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    """User registration"""
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        email = request.form.get('email', '').strip()
-        password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
-        full_name = request.form.get('full_name', '').strip()
-        
-        # Validation
-        if not all([username, email, password, confirm_password, full_name]):
-            flash('All fields are required', 'danger')
-            return render_template('register.html')
-        
-        if password != confirm_password:
-            flash('Passwords do not match', 'danger')
-            return render_template('register.html')
-        
-        if len(password) < 6:
-            flash('Password must be at least 6 characters long', 'danger')
-            return render_template('register.html')
-        
-        # Check if username or email already exists
-        if ClientUser.query.filter_by(username=username).first():
-            flash('Username already exists', 'danger')
-            return render_template('register.html')
-        
-        if ClientUser.query.filter_by(email=email).first():
-            flash('Email already registered', 'danger')
-            return render_template('register.html')
-        
-        # Create new user
-        new_user = ClientUser(
-            username=username,
-            email=email,
-            full_name=full_name
-        )
-        new_user.set_password(password)
-        new_user.generate_qr_code_id()
-        
-        try:
-            db.session.add(new_user)
-            db.session.commit()
-            flash('Registration successful! Please login to continue.', 'success')
-            return redirect(url_for('client_login'))
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Registration error: {e}")
-            flash('Registration failed. Please try again.', 'danger')
-    
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def client_login():
-    """Client user login"""
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
-        
-        if not username or not password:
-            flash('Username and password are required', 'danger')
-            return render_template('client_login.html')
-        
-        # Find user by username or email
-        user = ClientUser.query.filter(
-            (ClientUser.username == username) | (ClientUser.email == username)
-        ).first()
-        
-        if user and user.check_password(password):
-            if not user.is_active:
-                flash('Your account has been deactivated', 'danger')
-                return render_template('client_login.html')
-            
-            login_user(user)
-            flash(f'Welcome back, {user.full_name}!', 'success')
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('client_profile'))
-        else:
-            flash('Invalid username or password', 'danger')
-    
-    return render_template('client_login.html')
-
-@app.route('/client_logout')
-@login_required
-def client_logout():
-    """Client user logout"""
-    logout_user()
-    flash('You have been logged out', 'info')
-    return redirect(url_for('index'))
-
-@app.route('/profile')
-@login_required
-def client_profile():
-    """Client user profile page"""
-    if hasattr(current_user, 'username'):  # Check if it's a ClientUser
-        return render_template('client_profile.html', user=current_user)
-    else:
-        # Redirect admin users to admin dashboard
-        return redirect(url_for('admin_dashboard'))
-
-@app.route('/profile/edit', methods=['GET', 'POST'])
-@login_required
-def edit_profile():
-    """Edit client user profile"""
-    if not hasattr(current_user, 'username'):
-        return redirect(url_for('admin_dashboard'))
-    
-    if request.method == 'POST':
-        full_name = request.form.get('full_name', '').strip()
-        email = request.form.get('email', '').strip()
-        
-        if not full_name or not email:
-            flash('Full name and email are required', 'danger')
-            return render_template('edit_profile.html', user=current_user)
-        
-        # Check if email is already taken by another user
-        existing_user = ClientUser.query.filter(
-            ClientUser.email == email,
-            ClientUser.id != current_user.id
-        ).first()
-        
-        if existing_user:
-            flash('Email already in use by another account', 'danger')
-            return render_template('edit_profile.html', user=current_user)
-        
-        # Handle file upload
-        if 'profile_picture' in request.files:
-            file = request.files['profile_picture']
-            if file and file.filename and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                # Make filename unique
-                filename = f"{current_user.id}_{uuid.uuid4().hex[:8]}_{filename}"
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
-                current_user.profile_picture = f"uploads/{filename}"
-        
-        # Update user info
-        current_user.full_name = full_name
-        current_user.email = email
-        
-        try:
-            db.session.commit()
-            flash('Profile updated successfully!', 'success')
-            return redirect(url_for('client_profile'))
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Profile update error: {e}")
-            flash('Failed to update profile', 'danger')
-    
-    return render_template('edit_profile.html', user=current_user)
-
-@app.route('/my_qr_code')
-@login_required
-def my_qr_code():
-    """Generate and display user's QR code"""
-    if not hasattr(current_user, 'username'):
-        return redirect(url_for('admin_dashboard'))
-    
-    return render_template('my_qr_code.html', user=current_user)
-
-@app.route('/qr_code_image')
-@login_required
-def qr_code_image():
-    """Generate QR code image"""
-    if not hasattr(current_user, 'username'):
-        return redirect(url_for('admin_dashboard'))
-    
-    # Create QR code
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(current_user.qr_code_id)
-    qr.make(fit=True)
-    
-    # Create QR code image
-    qr_img = qr.make_image(fill_color="black", back_color="white")
-    
-    # If user has profile picture, try to add it to center
-    if current_user.profile_picture:
-        try:
-            profile_path = os.path.join('static', current_user.profile_picture)
-            if os.path.exists(profile_path):
-                # Open and resize profile image
-                profile_img = Image.open(profile_path)
-                
-                # Calculate size for center logo (about 1/5 of QR code)
-                qr_width, qr_height = qr_img.size
-                logo_size = qr_width // 5
-                
-                # Resize profile image
-                profile_img = profile_img.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
-                
-                # Create a white background circle for the profile image
-                mask = Image.new('RGBA', (logo_size, logo_size), (255, 255, 255, 255))
-                
-                # Paste profile image in center of QR code
-                pos = ((qr_width - logo_size) // 2, (qr_height - logo_size) // 2)
-                qr_img.paste(mask, pos)
-                qr_img.paste(profile_img, pos)
-        except Exception as e:
-            logging.error(f"Error adding profile image to QR code: {e}")
-    
-    # Save to bytes
-    img_buffer = io.BytesIO()
-    qr_img.save(img_buffer, format='PNG')
-    img_buffer.seek(0)
-    
-    return send_file(img_buffer, mimetype='image/png', as_attachment=False)
-
-
