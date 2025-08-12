@@ -1,11 +1,13 @@
-from flask import render_template, request, redirect, url_for, flash, make_response, session
+from flask import render_template, request, redirect, url_for, flash, make_response, session, jsonify
 from flask_login import current_user
 from datetime import datetime
 import logging
+import csv
+import io
 
 from app import app, db
 from replit_auth import require_login, make_replit_blueprint
-from data_store import security_store
+from security_service import security_service
 
 # Register Replit Auth blueprint
 app.register_blueprint(make_replit_blueprint(), url_prefix="/auth")
@@ -26,21 +28,9 @@ def index():
 @require_login
 def admin_dashboard():
     """Admin dashboard for user management"""
-    users = security_store.get_all_users()
-    recent_activity = security_store.get_activity_log(limit=10)
-    
-    # Calculate stats
-    total_users = len(users)
-    allowed_users = len([u for u in users if u['status'] == 'allowed'])
-    banned_users = len([u for u in users if u['status'] == 'banned'])
-    checked_in_users = len([u for u in users if u.get('is_checked_in', False)])
-    
-    stats = {
-        'total_users': total_users,
-        'allowed_users': allowed_users,
-        'banned_users': banned_users,
-        'checked_in_users': checked_in_users
-    }
+    users = security_service.get_all_users()
+    recent_activity = security_service.get_activity_log(limit=10)
+    stats = security_service.get_statistics()
     
     return render_template('admin_dashboard.html', 
                           user=current_user, 
@@ -55,12 +45,13 @@ def add_user():
     full_name = request.form.get('full_name', '').strip()
     qr_code_id = request.form.get('qr_code_id', '').strip()
     status = request.form.get('status', 'allowed')
+    picture_file = request.files.get('picture')
     
     if not full_name or not qr_code_id:
         flash('Full name and QR Code ID are required', 'danger')
         return redirect(url_for('admin_dashboard'))
     
-    success, message = security_store.add_user(full_name, qr_code_id, status)
+    success, message = security_service.add_user(full_name, qr_code_id, status, picture_file)
     
     if success:
         flash(message, 'success')
@@ -76,12 +67,13 @@ def update_user(qr_code_id):
     """Update user information"""
     full_name = request.form.get('full_name', '').strip()
     status = request.form.get('status', 'allowed')
+    picture_file = request.files.get('picture')
     
     if not full_name:
         flash('Full name is required', 'danger')
         return redirect(url_for('admin_dashboard'))
     
-    success, message = security_store.update_user(qr_code_id, full_name=full_name, status=status)
+    success, message = security_service.update_user(qr_code_id, full_name=full_name, status=status, picture_file=picture_file)
     
     if success:
         flash(message, 'success')
@@ -95,7 +87,7 @@ def update_user(qr_code_id):
 @require_login
 def delete_user(qr_code_id):
     """Delete a user"""
-    success, message = security_store.delete_user(qr_code_id)
+    success, message = security_service.delete_user(qr_code_id)
     
     if success:
         flash(message, 'success')
@@ -113,7 +105,7 @@ def change_user_status(qr_code_id, status):
         flash('Invalid status', 'danger')
         return redirect(url_for('admin_dashboard'))
     
-    success, message = security_store.change_user_status(qr_code_id, status)
+    success, message = security_service.change_user_status(qr_code_id, status)
     
     if success:
         flash(f'User status changed to {status}', 'success')
@@ -125,7 +117,7 @@ def change_user_status(qr_code_id, status):
 
 @app.route('/access', methods=['GET', 'POST'])
 def access_control():
-    """Access control page - QR code scanning simulation"""
+    """Access control page - QR code scanning"""
     if request.method == 'POST':
         qr_code_id = request.form.get('qr_code_id', '').strip()
         
@@ -133,7 +125,7 @@ def access_control():
             flash('Please enter a QR Code ID', 'warning')
             return render_template('access_control.html', user=current_user)
         
-        success, message = security_store.process_access_attempt(qr_code_id)
+        success, message, user_data = security_service.process_access_attempt(qr_code_id)
         
         if success:
             flash(message, 'success')
@@ -141,8 +133,39 @@ def access_control():
         else:
             flash(message, 'danger')
             logging.warning(f"Access denied: {qr_code_id} - {message}")
+        
+        # Return user data for display
+        return render_template('access_control.html', user=current_user, scanned_user=user_data)
     
     return render_template('access_control.html', user=current_user)
+
+@app.route('/api/process_qr', methods=['POST'])
+def api_process_qr():
+    """API endpoint for QR code processing"""
+    data = request.get_json()
+    qr_code_id = data.get('qr_code_id', '').strip()
+    
+    if not qr_code_id:
+        return jsonify({'success': False, 'message': 'QR Code ID is required'}), 400
+    
+    success, message, user_data = security_service.process_access_attempt(qr_code_id, method="Camera")
+    
+    response_data = {
+        'success': success,
+        'message': message,
+        'user': None
+    }
+    
+    if user_data:
+        response_data['user'] = {
+            'full_name': user_data.full_name,
+            'qr_code_id': user_data.qr_code_id,
+            'status': user_data.status,
+            'is_checked_in': user_data.is_checked_in,
+            'picture_url': f"/static/uploads/{user_data.picture_filename}" if user_data.picture_filename else None
+        }
+    
+    return jsonify(response_data)
 
 @app.route('/reports')
 @require_login
@@ -167,7 +190,7 @@ def reports():
         except ValueError:
             flash('Invalid end date format', 'warning')
     
-    activities = security_store.search_activity(query, start_date, end_date)
+    activities = security_service.search_activity(query, start_date, end_date)
     
     return render_template('reports.html', 
                           user=current_user, 
@@ -199,8 +222,24 @@ def export_reports():
         except ValueError:
             pass
     
-    activities = security_store.search_activity(query, start_date, end_date)
-    csv_data = security_store.export_activity_to_csv(activities)
+    activities = security_service.search_activity(query, start_date, end_date)
+    
+    # Generate CSV data
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Timestamp', 'User Name', 'QR Code ID', 'Action', 'Method', 'Details'])
+    
+    for activity in activities:
+        writer.writerow([
+            activity.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            activity.user_name,
+            activity.qr_code_id,
+            activity.action.replace('_', ' ').title(),
+            activity.method,
+            activity.details
+        ])
+    
+    csv_data = output.getvalue()
     
     response = make_response(csv_data)
     response.headers['Content-Disposition'] = f'attachment; filename=activity_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
@@ -214,10 +253,14 @@ def export_reports():
 def search_users():
     """Search users API endpoint"""
     query = request.args.get('q', '').strip()
-    users = security_store.search_users(query)
+    users = security_service.search_users(query)
+    recent_activity = security_service.get_activity_log(limit=10)
+    stats = security_service.get_statistics()
     return render_template('admin_dashboard.html', 
                           user=current_user, 
                           users=users, 
+                          recent_activity=recent_activity,
+                          stats=stats,
                           search_query=query)
 
 @app.errorhandler(404)
