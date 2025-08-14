@@ -18,4 +18,5 @@ dependencies = [
     "opencv-python>=4.12.0.88",
     "pillow>=11.3.0",
     "qrcode[pil]>=8.2",
+    "chardet>=5.2.0",
 ]

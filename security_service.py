@@ -75,9 +75,32 @@ class SecurityService:
         """Analyze CSV file and return statistics"""
         import csv
         from io import StringIO
+        import chardet
         
-        # Read CSV content
-        csv_content = csv_file.read().decode('utf-8')
+        # Read CSV content with encoding detection
+        raw_content = csv_file.read()
+        
+        # Detect encoding
+        encoding_result = chardet.detect(raw_content)
+        encoding = encoding_result['encoding'] if encoding_result['encoding'] else 'utf-8'
+        
+        # Fallback encodings to try
+        encodings_to_try = [encoding, 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+        
+        csv_content = None
+        for enc in encodings_to_try:
+            try:
+                csv_content = raw_content.decode(enc)
+                break
+            except (UnicodeDecodeError, LookupError):
+                continue
+        
+        if csv_content is None:
+            return {
+                'success': False,
+                'message': 'Unable to decode CSV file. Please ensure it is saved in UTF-8 format.'
+            }
+        
         csv_file.seek(0)  # Reset file pointer
         
         # Parse CSV
@@ -186,9 +209,32 @@ class SecurityService:
         """Import users from CSV file"""
         import csv
         from io import StringIO
+        import chardet
         
-        # Read CSV content
-        csv_content = csv_file.read().decode('utf-8')
+        # Read CSV content with encoding detection
+        raw_content = csv_file.read()
+        
+        # Detect encoding
+        encoding_result = chardet.detect(raw_content)
+        encoding = encoding_result['encoding'] if encoding_result['encoding'] else 'utf-8'
+        
+        # Fallback encodings to try
+        encodings_to_try = [encoding, 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+        
+        csv_content = None
+        for enc in encodings_to_try:
+            try:
+                csv_content = raw_content.decode(enc)
+                break
+            except (UnicodeDecodeError, LookupError):
+                continue
+        
+        if csv_content is None:
+            return {
+                'success': False,
+                'message': 'Unable to decode CSV file. Please ensure it is saved in UTF-8 format.'
+            }
+        
         csv_reader = csv.DictReader(StringIO(csv_content))
         
         # Get existing barcodes
