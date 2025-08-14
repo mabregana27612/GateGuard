@@ -3,19 +3,13 @@ import uuid
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from PIL import Image
+from sqlalchemy import text
 from app import db
 from models import SecurityUser, ActivityLog
 
 import qrcode
 from io import BytesIO
 import base64
-import os
-import uuid
-from datetime import datetime
-from werkzeug.utils import secure_filename
-from PIL import Image
-from models import SecurityUser, ActivityLog
-from app import db
 
 class SecurityService:
     def __init__(self):
