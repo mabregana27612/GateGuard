@@ -130,9 +130,9 @@
                 <tbody>
                     {% for user in users %}
                     <tr>
-                        <td>
+                        <td class="user-avatar-cell">
                                 {% if user.picture_filename %}
-                                    <img src="/static/uploads/{{ user.picture_filename }}" alt="{{ user.full_name }}" class="user-avatar">
+                                    <img src="/static/uploads/{{ user.picture_filename }}" alt="{{ user.full_name }}" class="profile-picture">
                                 {% else %}
                                     <div class="user-avatar-placeholder">
                                         <i class="fas fa-user"></i>

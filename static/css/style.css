@@ -235,6 +235,33 @@ body {
     background: rgba(13, 202, 240, 0.05);
 }
 
+/* Profile Picture Styles */
+.profile-picture {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+}
+
+.profile-picture-large {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 3px solid #e9ecef;
+}
+
+/* User List Table Styles */
+.table td {
+    vertical-align: middle;
+}
+
+.user-avatar-cell {
+    width: 70px;
+    text-align: center;
+}
+
 /* Footer Styles */
 footer {
     margin-top: auto;
