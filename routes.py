@@ -268,10 +268,10 @@ def search_users():
 @require_login
 def download_csv_template():
     """Download CSV template for bulk user import"""
-    template_data = "full_name,qr_code_id,status\n"
-    template_data += "John Doe,USER001,allowed\n"
-    template_data += "Jane Smith,USER002,allowed\n"
-    template_data += "Bob Johnson,USER003,banned\n"
+    template_data = "employee_number,first_name,middle_name,last_name,full_name,qr_code_id,position,department,company,employee_type,address,contact_number,emergency_contact_name,emergency_contact_number,id_number,drivers_license,status\n"
+    template_data += "EMP001,John,A,Doe,John A Doe,USER001,Manager,IT,ABC Corp,Employee,123 Main St,555-0001,Jane Doe,555-0002,ID123456,DL789012,allowed\n"
+    template_data += "EMP002,Jane,B,Smith,Jane B Smith,USER002,Developer,IT,ABC Corp,Employee,456 Oak St,555-0003,John Smith,555-0004,ID234567,DL890123,allowed\n"
+    template_data += "EMP003,Bob,,Johnson,Bob Johnson,USER003,Security,Security,ABC Corp,Agency,789 Pine St,555-0005,Mary Johnson,555-0006,ID345678,DL901234,banned\n"
     
     response = make_response(template_data)
     response.headers['Content-Disposition'] = 'attachment; filename=user_import_template.csv'

@@ -36,8 +36,32 @@ class OAuth(OAuthConsumerMixin, db.Model):
 class SecurityUser(db.Model):
     __tablename__ = 'security_users'
     id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # Basic Information
+    employee_number = db.Column(db.String, unique=True, nullable=True)
+    first_name = db.Column(db.String, nullable=False)
+    middle_name = db.Column(db.String, nullable=True)
+    last_name = db.Column(db.String, nullable=False)
     full_name = db.Column(db.String, nullable=False)
     qr_code_id = db.Column(db.String, unique=True, nullable=False)
+    
+    # Work Information
+    position = db.Column(db.String, nullable=True)
+    department = db.Column(db.String, nullable=True)
+    company = db.Column(db.String, nullable=True)
+    employee_type = db.Column(db.String, nullable=True)  # Employee, Agency, etc.
+    
+    # Contact Information
+    address = db.Column(db.Text, nullable=True)
+    contact_number = db.Column(db.String, nullable=True)
+    emergency_contact_name = db.Column(db.String, nullable=True)
+    emergency_contact_number = db.Column(db.String, nullable=True)
+    
+    # Identification
+    id_number = db.Column(db.String, nullable=True)
+    drivers_license = db.Column(db.String, nullable=True)
+    
+    # System fields
     status = db.Column(db.String, default='allowed')  # allowed, banned
     picture_filename = db.Column(db.String, nullable=True)
     qr_code_filename = db.Column(db.String, nullable=True)
