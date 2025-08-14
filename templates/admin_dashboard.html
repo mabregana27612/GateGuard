@@ -183,6 +183,13 @@
                             </td>
                         <td>
                             <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-info" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#qrModal{{ loop.index }}"
+                                        title="View QR Code">
+                                    <i class="fas fa-qrcode"></i>
+                                </button>
+                                
                                 <button class="btn btn-sm btn-outline-primary" 
                                         onclick="editUser('{{ user.qr_code_id }}', '{{ user.full_name }}', '{{ user.status }}')">
                                     <i class="fas fa-edit"></i>
@@ -495,6 +502,127 @@ function editUser(qrCodeId, fullName, status) {
 
     var editModal = new bootstrap.Modal(document.getElementById('editUserModal'));
     editModal.show();
+}
+
+function analyzeCSV() {
+    const fileInput = document.getElementById('csv_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a CSV file first');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    
+    fetch('/admin/analyze_csv', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displayAnalytics(data);
+        } else {
+            alert('Error analyzing CSV: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error analyzing CSV file');
+    });
+}
+
+function displayAnalytics(data) {
+    // Show analytics section
+    document.getElementById('csvAnalytics').style.display = 'block';
+    
+    // Update counters
+    document.getElementById('totalRecords').textContent = data.total_records;
+    document.getElementById('newRecords').textContent = data.new_records;
+    document.getElementById('duplicateRecords').textContent = data.duplicate_records;
+    document.getElementById('errorRecords').textContent = data.error_records;
+    
+    // Update preview table
+    const tbody = document.getElementById('csvPreviewBody');
+    tbody.innerHTML = '';
+    
+    data.preview.forEach(record => {
+        const row = document.createElement('tr');
+        const statusClass = record.import_status === 'New' ? 'success' : 
+                           record.import_status === 'Duplicate' ? 'warning' : 'danger';
+        
+        row.innerHTML = `
+            <td>${record.full_name}</td>
+            <td><code>${record.qr_code_id}</code></td>
+            <td><span class="badge bg-${record.status === 'allowed' ? 'success' : 'danger'}">${record.status}</span></td>
+            <td><span class="badge bg-${statusClass}">${record.import_status}</span></td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    // Show/hide error details
+    if (data.error_records > 0 && data.errors) {
+        document.getElementById('errorDetails').style.display = 'block';
+        const errorList = document.getElementById('errorList');
+        errorList.innerHTML = '';
+        data.errors.forEach(error => {
+            const li = document.createElement('li');
+            li.textContent = error;
+            errorList.appendChild(li);
+        });
+    } else {
+        document.getElementById('errorDetails').style.display = 'none';
+    }
+    
+    // Show/hide import button
+    if (data.new_records > 0) {
+        document.getElementById('importBtn').style.display = 'inline-block';
+        document.getElementById('importCount').textContent = data.new_records;
+    } else {
+        document.getElementById('importBtn').style.display = 'none';
+    }
+}
+
+function importCSV() {
+    const fileInput = document.getElementById('csv_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a CSV file first');
+        return;
+    }
+    
+    const importBtn = document.getElementById('importBtn');
+    const originalText = importBtn.innerHTML;
+    importBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Importing...';
+    importBtn.disabled = true;
+    
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    
+    fetch('/admin/import_csv', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Successfully imported ${data.imported_count} users!`);
+            location.reload(); // Refresh the page to show new users
+        } else {
+            alert('Import failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error importing CSV file');
+    })
+    .finally(() => {
+        importBtn.innerHTML = originalText;
+        importBtn.disabled = false;
+    });
 }
 </script>
 {% endblock %}
