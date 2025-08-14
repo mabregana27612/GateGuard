@@ -1,7 +1,7 @@
 
 #!/usr/bin/env python3
 """
-Database migration script to add extended user fields
+Database migration script to update fields to match Excel structure
 """
 import os
 import sys
@@ -9,25 +9,16 @@ from sqlalchemy import text
 from app import app, db
 
 def migrate_database():
-    """Add extended user fields to security_users table"""
+    """Update security_users table to match Excel fields"""
     with app.app_context():
         try:
-            # List of new columns to add
+            # List of new columns to add (Excel-based)
             new_columns = [
-                ('employee_number', 'VARCHAR'),
-                ('first_name', 'VARCHAR'),
-                ('middle_name', 'VARCHAR'),
-                ('last_name', 'VARCHAR'),
-                ('position', 'VARCHAR'),
-                ('department', 'VARCHAR'),
-                ('company', 'VARCHAR'),
-                ('employee_type', 'VARCHAR'),
-                ('address', 'TEXT'),
-                ('contact_number', 'VARCHAR'),
-                ('emergency_contact_name', 'VARCHAR'),
-                ('emergency_contact_number', 'VARCHAR'),
-                ('id_number', 'VARCHAR'),
-                ('drivers_license', 'VARCHAR')
+                ('no', 'INTEGER'),
+                ('date_registered', 'DATE'),
+                ('role', 'VARCHAR'),
+                ('complete_name', 'VARCHAR'),
+                ('barcode', 'VARCHAR')
             ]
             
             # Check existing columns
@@ -45,7 +36,7 @@ def migrate_database():
                 if column_name not in existing_columns:
                     print(f"Adding column: {column_name}")
                     db.session.execute(text(f"""
-                        ALTER TABLE security_users 
+                        ALTER TABLE security_users
                         ADD COLUMN {column_name} {column_type}
                     """))
                     columns_added += 1
@@ -56,26 +47,40 @@ def migrate_database():
                 db.session.commit()
                 print(f"✓ Successfully added {columns_added} new columns")
                 
-                # Update existing records to populate first_name and last_name from full_name
+                # Update existing records to populate new fields
                 from models import SecurityUser
                 
-                users = SecurityUser.query.filter(
-                    (SecurityUser.first_name == None) | 
-                    (SecurityUser.last_name == None)
-                ).all()
+                users = SecurityUser.query.all()
                 
                 if users:
-                    print(f"Updating {len(users)} existing users with name fields...")
-                    for user in users:
-                        if user.full_name and not user.first_name:
-                            name_parts = user.full_name.split()
-                            user.first_name = name_parts[0] if name_parts else ''
-                            user.last_name = name_parts[-1] if len(name_parts) > 1 else ''
-                            if len(name_parts) > 2:
-                                user.middle_name = ' '.join(name_parts[1:-1])
+                    print(f"Updating {len(users)} existing users with Excel fields...")
+                    for i, user in enumerate(users, 1):
+                        # Set sequential number
+                        user.no = i
+                        
+                        # Set complete_name from full_name if available
+                        if user.full_name and not user.complete_name:
+                            user.complete_name = user.full_name
+                        elif not user.complete_name and user.first_name and user.last_name:
+                            middle = f" {user.middle_name}" if user.middle_name else ""
+                            user.complete_name = f"{user.first_name}{middle} {user.last_name}"
+                        
+                        # Set barcode from qr_code_id
+                        if user.qr_code_id and not user.barcode:
+                            user.barcode = user.qr_code_id
+                        
+                        # Set role from position if available
+                        if hasattr(user, 'position') and user.position and not user.role:
+                            user.role = user.position
+                        
+                        # Convert status to Excel format
+                        if user.status == 'allowed':
+                            user.status = 'Active'
+                        elif user.status == 'banned':
+                            user.status = 'Inactive'
                     
                     db.session.commit()
-                    print("✓ Updated existing users with name fields")
+                    print("✓ Updated existing users with Excel fields")
             else:
                 print("✓ All columns already exist")
             
@@ -87,12 +92,12 @@ def migrate_database():
             return False
 
 if __name__ == "__main__":
-    print("Starting extended fields migration...")
+    print("Starting Excel fields migration...")
     success = migrate_database()
     
     if success:
-        print("✓ Extended fields migration completed successfully!")
+        print("✓ Excel fields migration completed successfully!")
         sys.exit(0)
     else:
-        print("✗ Extended fields migration failed!")
+        print("✗ Excel fields migration failed!")
         sys.exit(1)

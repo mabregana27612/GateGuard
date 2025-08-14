@@ -37,32 +37,26 @@ class SecurityUser(db.Model):
     __tablename__ = 'security_users'
     id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
     
-    # Basic Information
-    employee_number = db.Column(db.String, unique=True, nullable=True)
+    # Excel fields - matching exactly
+    no = db.Column(db.Integer, nullable=True)  # Sequential number
+    date_registered = db.Column(db.Date, default=datetime.now().date)
+    last_name = db.Column(db.String, nullable=False)
     first_name = db.Column(db.String, nullable=False)
     middle_name = db.Column(db.String, nullable=True)
-    last_name = db.Column(db.String, nullable=False)
-    full_name = db.Column(db.String, nullable=False)
-    qr_code_id = db.Column(db.String, unique=True, nullable=False)
-    
-    # Work Information
-    position = db.Column(db.String, nullable=True)
-    department = db.Column(db.String, nullable=True)
+    role = db.Column(db.String, nullable=True)  # Position/Role
     company = db.Column(db.String, nullable=True)
-    employee_type = db.Column(db.String, nullable=True)  # Employee, Agency, etc.
-    
-    # Contact Information
     address = db.Column(db.Text, nullable=True)
     contact_number = db.Column(db.String, nullable=True)
-    emergency_contact_name = db.Column(db.String, nullable=True)
-    emergency_contact_number = db.Column(db.String, nullable=True)
-    
-    # Identification
+    complete_name = db.Column(db.String, nullable=False)  # Full name
     id_number = db.Column(db.String, nullable=True)
-    drivers_license = db.Column(db.String, nullable=True)
+    barcode = db.Column(db.String, unique=True, nullable=False)  # QR Code ID
+    status = db.Column(db.String, default='Active')  # Active, Inactive, etc.
+    
+    # Legacy fields for backward compatibility (will be auto-populated)
+    full_name = db.Column(db.String, nullable=True)  # Maps to complete_name
+    qr_code_id = db.Column(db.String, nullable=True)  # Maps to barcode
     
     # System fields
-    status = db.Column(db.String, default='allowed')  # allowed, banned
     picture_filename = db.Column(db.String, nullable=True)
     qr_code_filename = db.Column(db.String, nullable=True)
     biometric_template = db.Column(db.Text, nullable=True)  # For future face recognition

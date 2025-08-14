@@ -268,10 +268,10 @@ def search_users():
 @require_login
 def download_csv_template():
     """Download CSV template for bulk user import"""
-    template_data = "employee_number,first_name,middle_name,last_name,full_name,qr_code_id,position,department,company,employee_type,address,contact_number,emergency_contact_name,emergency_contact_number,id_number,drivers_license,status\n"
-    template_data += "EMP001,John,A,Doe,John A Doe,USER001,Manager,IT,ABC Corp,Employee,123 Main St,555-0001,Jane Doe,555-0002,ID123456,DL789012,allowed\n"
-    template_data += "EMP002,Jane,B,Smith,Jane B Smith,USER002,Developer,IT,ABC Corp,Employee,456 Oak St,555-0003,John Smith,555-0004,ID234567,DL890123,allowed\n"
-    template_data += "EMP003,Bob,,Johnson,Bob Johnson,USER003,Security,Security,ABC Corp,Agency,789 Pine St,555-0005,Mary Johnson,555-0006,ID345678,DL901234,banned\n"
+    template_data = "no,date_registered,last_name,first_name,middle_name,role,company,address,contact_number,complete_name,id_number,barcode,status\n"
+    template_data += "1,2024-01-15,Doe,John,A,Manager,ABC Corp,123 Main St,555-0001,John A Doe,ID123456,USER001,Active\n"
+    template_data += "2,2024-01-16,Smith,Jane,B,Developer,ABC Corp,456 Oak St,555-0003,Jane B Smith,ID234567,USER002,Active\n"
+    template_data += "3,2024-01-17,Johnson,Bob,,Security,ABC Corp,789 Pine St,555-0005,Bob Johnson,ID345678,USER003,Inactive\n"
     
     response = make_response(template_data)
     response.headers['Content-Disposition'] = 'attachment; filename=user_import_template.csv'

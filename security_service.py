@@ -91,15 +91,15 @@ class SecurityService:
                 'message': 'CSV file appears to be empty or invalid'
             }
         
-        # Check for basic required info (either full_name or first_name+last_name)
-        has_full_name = 'full_name' in headers
-        has_name_parts = 'first_name' in headers and 'last_name' in headers
-        has_qr_code = any(h in headers for h in ['qr_code_id', 'employee_number', 'id_number'])
+        # Check for Excel-based required fields
+        required_fields = ['first_name', 'last_name']
+        has_required_names = all(field in headers for field in required_fields)
+        has_barcode = 'barcode' in headers or 'id_number' in headers or 'qr_code_id' in headers
         
-        if not (has_full_name or has_name_parts) or not has_qr_code:
+        if not has_required_names or not has_barcode:
             return {
                 'success': False,
-                'message': 'CSV must contain either "full_name" or both "first_name" and "last_name", plus one of: "qr_code_id", "employee_number", or "id_number"'
+                'message': 'CSV must contain "first_name", "last_name", and either "barcode", "id_number", or "qr_code_id"'
             }
         
         # Get existing QR codes
@@ -116,40 +116,44 @@ class SecurityService:
         for row_num, row in enumerate(csv_reader, start=2):  # Start from 2 (after header)
             total_records += 1
             
-            # Extract name fields
+            # Extract name fields (Excel format)
             first_name = row.get('first_name', '').strip()
             last_name = row.get('last_name', '').strip()
-            full_name = row.get('full_name', '').strip()
+            middle_name = row.get('middle_name', '').strip()
             
-            # If full_name is empty, construct it from parts
-            if not full_name and first_name and last_name:
-                middle_name = row.get('middle_name', '').strip()
-                full_name = f"{first_name} {middle_name} {last_name}".strip().replace('  ', ' ')
-            elif not full_name:
+            if not first_name or not last_name:
                 error_records += 1
-                errors.append(f"Row {row_num}: Missing name information")
+                errors.append(f"Row {row_num}: Missing first_name or last_name")
                 continue
             
-            # Extract QR code ID from various possible columns
-            qr_code_id = (row.get('qr_code_id', '') or 
-                         row.get('employee_number', '') or 
-                         row.get('id_number', '')).strip()
+            # Build complete name
+            complete_name = row.get('complete_name', '').strip()
+            if not complete_name:
+                middle_part = f" {middle_name}" if middle_name else ""
+                complete_name = f"{first_name}{middle_part} {last_name}"
             
-            if not qr_code_id:
+            # Extract barcode/QR code ID from various possible columns
+            barcode = (row.get('barcode', '') or 
+                      row.get('qr_code_id', '') or 
+                      row.get('id_number', '')).strip()
+            
+            if not barcode:
                 error_records += 1
-                errors.append(f"Row {row_num}: Missing QR Code ID/Employee Number")
+                errors.append(f"Row {row_num}: Missing barcode/QR Code ID")
                 continue
             
-            # Extract other fields
-            status = row.get('status', 'allowed').strip().lower()
-            if status not in ['allowed', 'banned', 'active']:
-                status = 'allowed'  # Default to allowed
-            if status == 'active':
-                status = 'allowed'  # Convert active to allowed
+            # Extract other fields (Excel format)
+            status = row.get('status', 'Active').strip()
+            if status.lower() in ['active', 'allowed']:
+                status = 'Active'
+            elif status.lower() in ['inactive', 'banned']:
+                status = 'Inactive'
+            else:
+                status = 'Active'  # Default to Active
             
-            # Check for duplicates
+            # Check for duplicates using barcode
             import_status = 'New'
-            if qr_code_id in existing_qr_codes:
+            if barcode in existing_qr_codes:
                 duplicate_records += 1
                 import_status = 'Duplicate'
             else:
@@ -158,10 +162,11 @@ class SecurityService:
             # Add to preview (first 10 new records only)
             if len(preview_data) < 10 and import_status == 'New':
                 preview_data.append({
-                    'full_name': full_name,
-                    'qr_code_id': qr_code_id,
-                    'employee_number': row.get('employee_number', ''),
-                    'position': row.get('position', ''),
+                    'complete_name': complete_name,
+                    'barcode': barcode,
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'role': row.get('role', ''),
                     'company': row.get('company', ''),
                     'status': status,
                     'import_status': import_status
@@ -186,73 +191,96 @@ class SecurityService:
         csv_content = csv_file.read().decode('utf-8')
         csv_reader = csv.DictReader(StringIO(csv_content))
         
-        # Get existing QR codes
-        existing_qr_codes = set(user.qr_code_id for user in SecurityUser.query.all())
+        # Get existing barcodes
+        existing_qr_codes = set(user.barcode or user.qr_code_id for user in SecurityUser.query.all() if user.barcode or user.qr_code_id)
         
         imported_count = 0
         errors = []
         
+        # Get next sequential number
+        max_no = db.session.execute(text("SELECT COALESCE(MAX(no), 0) FROM security_users")).scalar() or 0
+        next_no = max_no + 1
+        
         try:
             for row_num, row in enumerate(csv_reader, start=2):
-                # Extract name fields
+                # Extract name fields (Excel format)
                 first_name = row.get('first_name', '').strip()
                 last_name = row.get('last_name', '').strip()
-                full_name = row.get('full_name', '').strip()
+                middle_name = row.get('middle_name', '').strip()
                 
-                # If full_name is empty, construct it from parts
-                if not full_name and first_name and last_name:
-                    middle_name = row.get('middle_name', '').strip()
-                    full_name = f"{first_name} {middle_name} {last_name}".strip().replace('  ', ' ')
-                
-                # Extract QR code ID from various possible columns
-                qr_code_id = (row.get('qr_code_id', '') or 
-                             row.get('employee_number', '') or 
-                             row.get('id_number', '')).strip()
-                
-                # Skip invalid or duplicate records
-                if not full_name or not qr_code_id:
+                if not first_name or not last_name:
                     continue
                 
-                if qr_code_id in existing_qr_codes:
+                # Build complete name
+                complete_name = row.get('complete_name', '').strip()
+                if not complete_name:
+                    middle_part = f" {middle_name}" if middle_name else ""
+                    complete_name = f"{first_name}{middle_part} {last_name}"
+                
+                # Extract barcode
+                barcode = (row.get('barcode', '') or 
+                          row.get('qr_code_id', '') or 
+                          row.get('id_number', '')).strip()
+                
+                # Skip invalid or duplicate records
+                if not barcode:
+                    continue
+                
+                if barcode in existing_qr_codes:
                     continue
                 
                 # Validate status
-                status = row.get('status', 'allowed').strip().lower()
-                if status not in ['allowed', 'banned', 'active']:
-                    status = 'allowed'
-                if status == 'active':
-                    status = 'allowed'
+                status = row.get('status', 'Active').strip()
+                if status.lower() in ['active', 'allowed']:
+                    status = 'Active'
+                elif status.lower() in ['inactive', 'banned']:
+                    status = 'Inactive'
+                else:
+                    status = 'Active'
                 
-                # Create new user with extended fields
+                # Parse date registered
+                date_registered = None
+                date_str = row.get('date_registered', '').strip()
+                if date_str:
+                    try:
+                        from datetime import datetime
+                        date_registered = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        try:
+                            date_registered = datetime.strptime(date_str, '%m/%d/%Y').date()
+                        except ValueError:
+                            pass
+                
+                # Create new user with Excel fields
                 new_user = SecurityUser(
-                    employee_number=row.get('employee_number', '').strip() or None,
-                    first_name=first_name or full_name.split()[0] if full_name else '',
-                    middle_name=row.get('middle_name', '').strip() or None,
-                    last_name=last_name or (full_name.split()[-1] if full_name and len(full_name.split()) > 1 else ''),
-                    full_name=full_name,
-                    qr_code_id=qr_code_id,
-                    position=row.get('position', '').strip() or None,
-                    department=row.get('department', '').strip() or None,
+                    no=next_no,
+                    date_registered=date_registered or datetime.now().date(),
+                    first_name=first_name,
+                    middle_name=middle_name or None,
+                    last_name=last_name,
+                    complete_name=complete_name,
+                    barcode=barcode,
+                    role=row.get('role', '').strip() or None,
                     company=row.get('company', '').strip() or None,
-                    employee_type=row.get('employee_type', '').strip() or row.get('type', '').strip() or None,
                     address=row.get('address', '').strip() or None,
-                    contact_number=row.get('contact_number', '').strip() or row.get('contact', '').strip() or None,
-                    emergency_contact_name=row.get('emergency_contact_name', '').strip() or None,
-                    emergency_contact_number=row.get('emergency_contact_number', '').strip() or None,
+                    contact_number=row.get('contact_number', '').strip() or None,
                     id_number=row.get('id_number', '').strip() or None,
-                    drivers_license=row.get('drivers_license', '').strip() or row.get('driver_license', '').strip() or None,
-                    status=status
+                    status=status,
+                    # Legacy compatibility
+                    full_name=complete_name,
+                    qr_code_id=barcode
                 )
                 
                 # Generate QR code
-                qr_filename = self.generate_qr_code(qr_code_id, full_name)
+                qr_filename = self.generate_qr_code(barcode, complete_name)
                 new_user.qr_code_filename = qr_filename
                 
                 db.session.add(new_user)
                 imported_count += 1
+                next_no += 1
                 
                 # Add to existing set to prevent duplicates within the same file
-                existing_qr_codes.add(qr_code_id)
+                existing_qr_codes.add(barcode)
             
             db.session.commit()
             
