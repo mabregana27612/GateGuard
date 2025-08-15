@@ -29,8 +29,10 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize the app with the extension
 db.init_app(app)
 
-# Create tables
+# Create tables and initialize
 with app.app_context():
     import models  # noqa: F401
+    import auth  # noqa: F401
     db.create_all()
-    logging.info("Database tables created")
+    auth.create_default_admin()
+    logging.info("Database tables created and default admin initialized")

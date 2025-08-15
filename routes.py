@@ -6,11 +6,8 @@ import csv
 import io
 
 from app import app, db
-from replit_auth import require_login, make_replit_blueprint
+from auth import require_login, create_default_admin
 from security_service import security_service
-
-# Register Replit Auth blueprint
-app.register_blueprint(make_replit_blueprint(), url_prefix="/auth")
 
 # Make session permanent
 @app.before_request
