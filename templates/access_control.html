@@ -24,7 +24,7 @@
                 </div>
 
                 <!-- QR Code Input Form -->
-                <form method="POST" action="{{ url_for('access_control') }}">
+                <form method="POST" action="{{ url_for('access_control') }}" id="accessForm">
                     <div class="mb-4">
                         <label for="qr_code_id" class="form-label">QR Code ID</label>
                         <div class="input-group input-group-lg">
@@ -43,6 +43,21 @@
                         <div class="form-text">
                             <i class="fas fa-info-circle me-1"></i>
                             Present your QR code to the camera or enter the ID manually
+                        </div>
+                    </div>
+
+                    <!-- Visit Reason Section - Initially Hidden -->
+                    <div class="mb-4 d-none" id="visitReasonSection">
+                        <label for="visit_reason" class="form-label">
+                            <i class="fas fa-clipboard-list me-2"></i>
+                            Reason for Visit
+                        </label>
+                        <select class="form-select form-select-lg" id="visit_reason" name="visit_reason">
+                            <option value="">Select reason for visit...</option>
+                            <!-- Options will be populated dynamically based on role -->
+                        </select>
+                        <div class="form-text">
+                            Please select the primary reason for your visit today
                         </div>
                     </div>
 
@@ -204,6 +219,70 @@
 {% block scripts %}
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script>
+// Visit reasons by role type
+const visitReasons = {
+    'Manager': ['Management Meeting', 'Strategic Planning', 'Team Review', 'Project Oversight', 'Client Meeting', 'Budget Review', 'Other Management Task'],
+    'Employee Supervisor': ['Team Supervision', 'Performance Review', 'Training Session', 'Operational Meeting', 'Quality Control', 'Staff Coordination', 'Other Supervision Task'],
+    'Sen. Supervisor': ['Senior Management Review', 'Policy Implementation', 'Strategic Coordination', 'Department Meeting', 'Process Improvement', 'Leadership Meeting', 'Other Senior Task'],
+    'Employee': ['Regular Work Shift', 'Training Session', 'Team Meeting', 'Project Work', 'Administrative Task', 'Equipment Setup', 'Other Work Task'],
+    'Outbound Processor': ['Outbound Processing', 'Package Preparation', 'Shipping Coordination', 'Quality Check', 'System Update', 'Training', 'Other Processing Task'],
+    'Agency': ['Client Service', 'Coordination Meeting', 'System Training', 'Documentation', 'Quality Assurance', 'Report Submission', 'Other Agency Task'],
+    'Checker': ['Quality Control', 'Inventory Check', 'Process Verification', 'Documentation Review', 'System Audit', 'Training', 'Other Checking Task'],
+    'Default': ['Regular Visit', 'Meeting', 'Training', 'Administrative Task', 'Consultation', 'Maintenance', 'Other']
+};
+
+function getVisitReasonsForRole(role) {
+    if (visitReasons[role]) return visitReasons[role];
+    for (const [key, reasons] of Object.entries(visitReasons)) {
+        if (role && role.toLowerCase().includes(key.toLowerCase())) return reasons;
+    }
+    return visitReasons['Default'];
+}
+
+function populateVisitReasons(role) {
+    const reasonSelect = document.getElementById('visit_reason');
+    const reasons = getVisitReasonsForRole(role);
+    reasonSelect.innerHTML = '<option value="">Select reason for visit...</option>';
+    reasons.forEach(reason => {
+        const option = document.createElement('option');
+        option.value = reason;
+        option.textContent = reason;
+        reasonSelect.appendChild(option);
+    });
+}
+
+async function checkUserAndShowReasons() {
+    const qrCodeId = document.getElementById('qr_code_id').value.trim();
+    if (!qrCodeId) return;
+    
+    try {
+        const response = await fetch('/api/get_user_info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qr_code_id: qrCodeId })
+        });
+        const data = await response.json();
+        if (data.success && data.user) {
+            const role = data.user.role || 'Default';
+            populateVisitReasons(role);
+            document.getElementById('visitReasonSection').classList.remove('d-none');
+            document.getElementById('visit_reason').required = true;
+        }
+    } catch (error) {
+        console.error('Error checking user:', error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const qrInput = document.getElementById('qr_code_id');
+    let timeout;
+    qrInput.addEventListener('input', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(checkUserAndShowReasons, 500);
+    });
+    qrInput.addEventListener('blur', checkUserAndShowReasons);
+});
+
 let qrScanner = null;
 let videoElement = null;
 
@@ -270,8 +349,8 @@ function handleQRResult(qrData) {
     const input = document.getElementById('qr_code_id');
     input.value = qrData.toUpperCase();
     
-    // Process the QR code via API for immediate response
-    processQRCode(qrData.toUpperCase());
+    // Check user and show visit reason selection
+    checkUserAndShowReasons();
 }
 
 function processQRCode(qrCodeId) {
@@ -283,13 +362,16 @@ function processQRCode(qrCodeId) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
     submitBtn.disabled = true;
 
+    // Get visit reason if available
+    const visitReason = document.getElementById('visit_reason').value;
+    
     // Send AJAX request to process QR code
     fetch('/api/process_qr', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ qr_code_id: qrCodeId })
+        body: JSON.stringify({ qr_code_id: qrCodeId, visit_reason: visitReason })
     })
     .then(response => response.json())
     .then(data => {

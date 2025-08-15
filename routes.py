@@ -117,16 +117,17 @@ def access_control():
     """Access control page - QR code scanning"""
     if request.method == 'POST':
         qr_code_id = request.form.get('qr_code_id', '').strip()
+        visit_reason = request.form.get('visit_reason', '').strip()
         
         if not qr_code_id:
             flash('Please enter a QR Code ID', 'warning')
             return render_template('access_control.html', user=current_user)
         
-        success, message, user_data = security_service.process_access_attempt(qr_code_id)
+        success, message, user_data = security_service.process_access_attempt(qr_code_id, visit_reason=visit_reason)
         
         if success:
             flash(message, 'success')
-            logging.info(f"Access granted: {qr_code_id}")
+            logging.info(f"Access granted: {qr_code_id} - Reason: {visit_reason}")
         else:
             flash(message, 'danger')
             logging.warning(f"Access denied: {qr_code_id} - {message}")
@@ -136,16 +137,44 @@ def access_control():
     
     return render_template('access_control.html', user=current_user)
 
+@app.route('/api/get_user_info', methods=['POST'])
+def api_get_user_info():
+    """API endpoint to get user information for visit reason selection"""
+    data = request.get_json()
+    qr_code_id = data.get('qr_code_id', '').strip()
+    
+    if not qr_code_id:
+        return jsonify({'success': False, 'message': 'QR Code ID required'})
+    
+    try:
+        user = security_service.get_user_by_qr(qr_code_id)
+        if user:
+            return jsonify({
+                'success': True,
+                'user': {
+                    'full_name': user.full_name or user.complete_name,
+                    'role': user.role,
+                    'company': user.company,
+                    'status': user.status
+                }
+            })
+        else:
+            return jsonify({'success': False, 'message': 'User not found'})
+    except Exception as e:
+        logging.error(f"Error getting user info: {e}")
+        return jsonify({'success': False, 'message': 'Error retrieving user information'})
+
 @app.route('/api/process_qr', methods=['POST'])
 def api_process_qr():
     """API endpoint for QR code processing"""
     data = request.get_json()
     qr_code_id = data.get('qr_code_id', '').strip()
+    visit_reason = data.get('visit_reason', '').strip()
     
     if not qr_code_id:
         return jsonify({'success': False, 'message': 'QR Code ID is required'}), 400
     
-    success, message, user_data = security_service.process_access_attempt(qr_code_id, method="Camera")
+    success, message, user_data = security_service.process_access_attempt(qr_code_id, method="Camera", visit_reason=visit_reason)
     
     response_data = {
         'success': success,
@@ -225,7 +254,7 @@ def export_reports():
     # Generate CSV data
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Timestamp', 'User Name', 'QR Code ID', 'Action', 'Method', 'Details'])
+    writer.writerow(['Timestamp', 'User Name', 'QR Code ID', 'Action', 'Method', 'Details', 'Visit Reason', 'User Role'])
     
     for activity in activities:
         writer.writerow([
@@ -234,7 +263,9 @@ def export_reports():
             activity.qr_code_id,
             activity.action.replace('_', ' ').title(),
             activity.method,
-            activity.details
+            activity.details,
+            activity.visit_reason or '',
+            activity.user_role or ''
         ])
     
     csv_data = output.getvalue()

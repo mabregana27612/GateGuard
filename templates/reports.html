@@ -92,6 +92,8 @@
                         <th>QR Code ID</th>
                         <th>Action</th>
                         <th>Method</th>
+                        <th>Visit Reason</th>
+                        <th>Role</th>
                         <th>Status</th>
                         <th>Details</th>
                     </tr>
@@ -129,6 +131,20 @@
                         </td>
                         <td>
                             <span class="badge bg-secondary">{{ activity.method }}</span>
+                        </td>
+                        <td>
+                            {% if activity.visit_reason %}
+                                <span class="badge bg-info">{{ activity.visit_reason }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if activity.user_role %}
+                                <span class="badge bg-primary">{{ activity.user_role }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if activity.details == 'Success' %}

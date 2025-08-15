@@ -63,6 +63,8 @@ class ActivityLog(db.Model):
     action = db.Column(db.String, nullable=False)  # check_in, check_out, access_denied
     method = db.Column(db.String, default='QR')  # QR, Face, Manual
     details = db.Column(db.String, nullable=True)
+    visit_reason = db.Column(db.String, nullable=True)  # Reason for visiting
+    user_role = db.Column(db.String, nullable=True)  # User's role for context
     timestamp = db.Column(db.DateTime, default=datetime.now)
     
     security_user = db.relationship('SecurityUser', backref='activity_logs')
