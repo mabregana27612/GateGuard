@@ -40,6 +40,33 @@ def migrate_activity_logs():
                 """))
                 print("✓ user_role column added")
             
+            # Add operator_id column if it doesn't exist
+            if 'operator_id' not in existing_columns:
+                print("Adding operator_id column...")
+                db.session.execute(text("""
+                    ALTER TABLE activity_logs 
+                    ADD COLUMN operator_id INTEGER REFERENCES admin_users(id)
+                """))
+                print("✓ operator_id column added")
+            
+            # Add operator_name column if it doesn't exist
+            if 'operator_name' not in existing_columns:
+                print("Adding operator_name column...")
+                db.session.execute(text("""
+                    ALTER TABLE activity_logs 
+                    ADD COLUMN operator_name VARCHAR
+                """))
+                print("✓ operator_name column added")
+            
+            # Add operator_role column if it doesn't exist
+            if 'operator_role' not in existing_columns:
+                print("Adding operator_role column...")
+                db.session.execute(text("""
+                    ALTER TABLE activity_logs 
+                    ADD COLUMN operator_role VARCHAR
+                """))
+                print("✓ operator_role column added")
+            
             db.session.commit()
             print("✓ Activity logs table migration completed successfully!")
             return True
