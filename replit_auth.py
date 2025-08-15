@@ -17,7 +17,7 @@ from sqlalchemy.exc import NoResultFound
 from werkzeug.local import LocalProxy
 
 from app import app, db
-from models import OAuth, User
+# OAuth and User models removed - using AdminUser instead
 
 login_manager = LoginManager(app)
 
