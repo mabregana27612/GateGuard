@@ -118,6 +118,11 @@ def access_control():
     if request.method == 'POST':
         qr_code_id = request.form.get('qr_code_id', '').strip()
         visit_reason = request.form.get('visit_reason', '').strip()
+        custom_reason = request.form.get('custom_reason', '').strip()
+        
+        # Use custom reason if "Other" was selected
+        if visit_reason == 'Other' and custom_reason:
+            visit_reason = f"Other: {custom_reason}"
         
         if not qr_code_id:
             flash('Please enter a QR Code ID', 'warning')
@@ -161,7 +166,8 @@ def api_get_user_info():
                     'full_name': user.full_name or user.complete_name,
                     'role': user.role,
                     'company': user.company,
-                    'status': user.status
+                    'status': user.status,
+                    'is_checked_in': user.is_checked_in
                 }
             })
         else:
@@ -176,6 +182,11 @@ def api_process_qr():
     data = request.get_json()
     qr_code_id = data.get('qr_code_id', '').strip()
     visit_reason = data.get('visit_reason', '').strip()
+    custom_reason = data.get('custom_reason', '').strip()
+    
+    # Use custom reason if "Other" was selected
+    if visit_reason == 'Other' and custom_reason:
+        visit_reason = f"Other: {custom_reason}"
     
     if not qr_code_id:
         return jsonify({'success': False, 'message': 'QR Code ID is required'}), 400

@@ -56,7 +56,25 @@
                             <option value="">Select reason for visit...</option>
                             <!-- Options will be populated dynamically based on role -->
                         </select>
-                        <div class="form-text">
+                        
+                        <!-- Custom reason text input - shown when "Other" is selected -->
+                        <div class="mt-3 d-none" id="customReasonSection">
+                            <label for="custom_reason" class="form-label">
+                                <i class="fas fa-edit me-2"></i>
+                                Please specify your reason for visit
+                            </label>
+                            <input type="text" 
+                                   class="form-control form-control-lg" 
+                                   id="custom_reason" 
+                                   name="custom_reason" 
+                                   placeholder="Enter your specific reason for visit..."
+                                   maxlength="200">
+                            <div class="form-text">
+                                Please provide a brief description of your visit purpose
+                            </div>
+                        </div>
+                        
+                        <div class="form-text mt-2">
                             Please select the primary reason for your visit today
                         </div>
                     </div>
@@ -249,6 +267,12 @@ function populateVisitReasons(role) {
         option.textContent = reason;
         reasonSelect.appendChild(option);
     });
+    
+    // Add "Other" option at the end
+    const otherOption = document.createElement('option');
+    otherOption.value = 'Other';
+    otherOption.textContent = 'Other (Please specify)';
+    reasonSelect.appendChild(otherOption);
 }
 
 async function checkUserAndShowReasons() {
@@ -265,8 +289,18 @@ async function checkUserAndShowReasons() {
         if (data.success && data.user) {
             const role = data.user.role || 'Default';
             populateVisitReasons(role);
-            document.getElementById('visitReasonSection').classList.remove('d-none');
-            document.getElementById('visit_reason').required = true;
+            
+            // Only show visit reason for check-in (when user is not currently checked in)
+            if (!data.user.is_checked_in) {
+                document.getElementById('visitReasonSection').classList.remove('d-none');
+                document.getElementById('visit_reason').required = true;
+            } else {
+                // Hide visit reason for check-out
+                document.getElementById('visitReasonSection').classList.add('d-none');
+                document.getElementById('visit_reason').required = false;
+                document.getElementById('customReasonSection').classList.add('d-none');
+                document.getElementById('custom_reason').required = false;
+            }
         }
     } catch (error) {
         console.error('Error checking user:', error);
@@ -275,12 +309,54 @@ async function checkUserAndShowReasons() {
 
 document.addEventListener('DOMContentLoaded', function() {
     const qrInput = document.getElementById('qr_code_id');
+    const visitReasonSelect = document.getElementById('visit_reason');
+    const customReasonSection = document.getElementById('customReasonSection');
+    const customReasonInput = document.getElementById('custom_reason');
+    const accessForm = document.getElementById('accessForm');
+    
     let timeout;
     qrInput.addEventListener('input', function() {
         clearTimeout(timeout);
         timeout = setTimeout(checkUserAndShowReasons, 500);
     });
     qrInput.addEventListener('blur', checkUserAndShowReasons);
+    
+    // Handle visit reason selection changes
+    visitReasonSelect.addEventListener('change', function() {
+        if (this.value === 'Other') {
+            customReasonSection.classList.remove('d-none');
+            customReasonInput.required = true;
+            customReasonInput.focus();
+        } else {
+            customReasonSection.classList.add('d-none');
+            customReasonInput.required = false;
+            customReasonInput.value = '';
+        }
+    });
+    
+    // Handle form submission
+    accessForm.addEventListener('submit', function(e) {
+        const visitReasonSection = document.getElementById('visitReasonSection');
+        const visitReason = visitReasonSelect.value;
+        const customReason = customReasonInput.value.trim();
+        
+        // Check if visit reason is required and not provided
+        if (!visitReasonSection.classList.contains('d-none')) {
+            if (!visitReason) {
+                e.preventDefault();
+                alert('Please select a reason for your visit.');
+                visitReasonSelect.focus();
+                return false;
+            }
+            
+            if (visitReason === 'Other' && !customReason) {
+                e.preventDefault();
+                alert('Please specify your reason for visit.');
+                customReasonInput.focus();
+                return false;
+            }
+        }
+    });
 });
 
 let qrScanner = null;
@@ -364,6 +440,7 @@ function processQRCode(qrCodeId) {
 
     // Get visit reason if available
     const visitReason = document.getElementById('visit_reason').value;
+    const customReason = document.getElementById('custom_reason').value.trim();
     
     // Send AJAX request to process QR code
     fetch('/api/process_qr', {
@@ -371,7 +448,11 @@ function processQRCode(qrCodeId) {
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ qr_code_id: qrCodeId, visit_reason: visitReason })
+        body: JSON.stringify({ 
+            qr_code_id: qrCodeId, 
+            visit_reason: visitReason,
+            custom_reason: customReason
+        })
     })
     .then(response => response.json())
     .then(data => {
