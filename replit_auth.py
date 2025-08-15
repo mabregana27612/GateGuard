@@ -17,46 +17,26 @@ from sqlalchemy.exc import NoResultFound
 from werkzeug.local import LocalProxy
 
 from app import app, db
-# OAuth and User models removed - using AdminUser instead
+from models import AdminUser
 
 login_manager = LoginManager(app)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(user_id)
+    return AdminUser.query.get(user_id)
 
 class UserSessionStorage(BaseStorage):
     def get(self, blueprint):
-        try:
-            token = db.session.query(OAuth).filter_by(
-                user_id=current_user.get_id(),
-                browser_session_key=g.browser_session_key,
-                provider=blueprint.name,
-            ).one().token
-        except NoResultFound:
-            token = None
-        return token
+        # Simple token storage in session for now
+        return session.get(f'{blueprint.name}_token')
 
     def set(self, blueprint, token):
-        db.session.query(OAuth).filter_by(
-            user_id=current_user.get_id(),
-            browser_session_key=g.browser_session_key,
-            provider=blueprint.name,
-        ).delete()
-        new_model = OAuth()
-        new_model.user_id = current_user.get_id()
-        new_model.browser_session_key = g.browser_session_key
-        new_model.provider = blueprint.name
-        new_model.token = token
-        db.session.add(new_model)
-        db.session.commit()
+        # Store token in session
+        session[f'{blueprint.name}_token'] = token
 
     def delete(self, blueprint):
-        db.session.query(OAuth).filter_by(
-            user_id=current_user.get_id(),
-            browser_session_key=g.browser_session_key,
-            provider=blueprint.name).delete()
-        db.session.commit()
+        # Remove token from session
+        session.pop(f'{blueprint.name}_token', None)
 
 def make_replit_blueprint():
     try:
@@ -120,15 +100,27 @@ def make_replit_blueprint():
     return replit_bp
 
 def save_user(user_claims):
-    user = User()
-    user.id = user_claims['sub']
+    # Check if admin user already exists with this email
+    existing_user = AdminUser.query.filter_by(email=user_claims.get('email')).first()
+    if existing_user:
+        # Update existing user's last login
+        existing_user.last_login = db.session.query(db.func.now()).scalar()
+        db.session.commit()
+        return existing_user
+    
+    # Create new admin user (default role: guard)
+    user = AdminUser()
     user.email = user_claims.get('email')
     user.first_name = user_claims.get('first_name')
     user.last_name = user_claims.get('last_name')
-    user.profile_image_url = user_claims.get('profile_image_url')
-    merged_user = db.session.merge(user)
+    user.username = user_claims.get('email')  # Use email as username
+    user.password_hash = 'oauth_user'  # Placeholder for OAuth users
+    user.role = 'guard'  # Default role
+    user.last_login = db.session.query(db.func.now()).scalar()
+    
+    db.session.add(user)
     db.session.commit()
-    return merged_user
+    return user
 
 @oauth_authorized.connect
 def logged_in(blueprint, token):
