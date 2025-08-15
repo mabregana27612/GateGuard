@@ -6,7 +6,7 @@ import csv
 import io
 
 from app import app, db
-from auth import require_login, create_default_admin
+from auth import require_login, require_admin, require_super_admin, create_default_admin
 from security_service import security_service
 
 # Make session permanent
@@ -22,7 +22,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/admin')
-@require_login
+@require_admin
 def admin_dashboard():
     """Admin dashboard for user management"""
     users = security_service.get_all_users()
@@ -36,7 +36,7 @@ def admin_dashboard():
                           stats=stats)
 
 @app.route('/admin/add_user', methods=['POST'])
-@require_login
+@require_admin
 def add_user():
     """Add a new user"""
     full_name = request.form.get('full_name', '').strip()
@@ -123,7 +123,13 @@ def access_control():
             flash('Please enter a QR Code ID', 'warning')
             return render_template('access_control.html', user=current_user)
         
-        success, message, user_data = security_service.process_access_attempt(qr_code_id, visit_reason=visit_reason)
+        success, message, user_data = security_service.process_access_attempt(
+            qr_code_id, 
+            visit_reason=visit_reason,
+            operator_id=current_user.id if current_user.is_authenticated else None,
+            operator_name=current_user.full_name if current_user.is_authenticated else 'System',
+            operator_role=current_user.role if current_user.is_authenticated else 'system'
+        )
         
         if success:
             flash(message, 'success')
@@ -174,7 +180,14 @@ def api_process_qr():
     if not qr_code_id:
         return jsonify({'success': False, 'message': 'QR Code ID is required'}), 400
     
-    success, message, user_data = security_service.process_access_attempt(qr_code_id, method="Camera", visit_reason=visit_reason)
+    success, message, user_data = security_service.process_access_attempt(
+        qr_code_id, 
+        method="Camera", 
+        visit_reason=visit_reason,
+        operator_id=current_user.id if current_user.is_authenticated else None,
+        operator_name=current_user.full_name if current_user.is_authenticated else 'System',
+        operator_role=current_user.role if current_user.is_authenticated else 'system'
+    )
     
     response_data = {
         'success': success,
@@ -254,7 +267,7 @@ def export_reports():
     # Generate CSV data
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Timestamp', 'User Name', 'QR Code ID', 'Action', 'Method', 'Details', 'Visit Reason', 'User Role'])
+    writer.writerow(['Timestamp', 'User Name', 'QR Code ID', 'Action', 'Method', 'Details', 'Visit Reason', 'User Role', 'Operator', 'Operator Role'])
     
     for activity in activities:
         writer.writerow([
@@ -265,7 +278,9 @@ def export_reports():
             activity.method,
             activity.details,
             activity.visit_reason or '',
-            activity.user_role or ''
+            activity.user_role or '',
+            activity.operator_name or 'System',
+            activity.operator_role or 'system'
         ])
     
     csv_data = output.getvalue()

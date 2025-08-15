@@ -449,17 +449,21 @@ class SecurityService:
         """Change user status"""
         return self.update_user(qr_code_id, status=status)
     
-    def process_access_attempt(self, qr_code_id, method="QR", visit_reason=None):
+    def process_access_attempt(self, qr_code_id, method="QR", visit_reason=None, operator_id=None, operator_name=None, operator_role=None):
         """Process access attempt and log activity"""
         qr_code_id = qr_code_id.upper()
         user = self.get_user_by_qr(qr_code_id)
         
         if not user:
-            self._log_activity(None, qr_code_id, "Unknown", "access_denied", method, "User not found", visit_reason=visit_reason)
+            self._log_activity(None, qr_code_id, "Unknown", "access_denied", method, "User not found", 
+                             visit_reason=visit_reason, operator_id=operator_id, 
+                             operator_name=operator_name, operator_role=operator_role)
             return False, "Access Denied: Invalid QR Code", None
         
         if user.status != 'allowed':
-            self._log_activity(user.id, qr_code_id, user.full_name, "access_denied", method, f"User status: {user.status}", visit_reason=visit_reason, user_role=user.role)
+            self._log_activity(user.id, qr_code_id, user.full_name, "access_denied", method, f"User status: {user.status}", 
+                             visit_reason=visit_reason, user_role=user.role, operator_id=operator_id,
+                             operator_name=operator_name, operator_role=operator_role)
             return False, f"Access Denied: User is {user.status}", user
         
         # Determine action based on current check-in status
@@ -471,7 +475,9 @@ class SecurityService:
         try:
             db.session.commit()
             # Log the activity
-            self._log_activity(user.id, qr_code_id, user.full_name, action, method, "Success", visit_reason=visit_reason, user_role=user.role)
+            self._log_activity(user.id, qr_code_id, user.full_name, action, method, "Success", 
+                             visit_reason=visit_reason, user_role=user.role, operator_id=operator_id,
+                             operator_name=operator_name, operator_role=operator_role)
             
             action_text = action.replace('_', ' ').title()
             return True, f"Access Granted: {action_text} successful for {user.full_name}", user
@@ -479,7 +485,8 @@ class SecurityService:
             db.session.rollback()
             return False, f"Database error: {str(e)}", user
     
-    def _log_activity(self, user_id, qr_code_id, user_name, action, method, details, visit_reason=None, user_role=None):
+    def _log_activity(self, user_id, qr_code_id, user_name, action, method, details, visit_reason=None, 
+                     user_role=None, operator_id=None, operator_name=None, operator_role=None):
         """Log activity to the database"""
         activity = ActivityLog(
             security_user_id=user_id,
@@ -489,7 +496,10 @@ class SecurityService:
             method=method,
             details=details,
             visit_reason=visit_reason,
-            user_role=user_role
+            user_role=user_role,
+            operator_id=operator_id,
+            operator_name=operator_name,
+            operator_role=operator_role
         )
         
         try:

@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from functools import wraps
+from datetime import datetime
 from models import AdminUser
 from app import app, db
 import logging
@@ -24,6 +25,30 @@ def require_login(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def require_admin(f):
+    """Decorator to require admin or super_admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if not current_user.can_access_dashboard():
+            flash('Access denied. Admin privileges required.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def require_super_admin(f):
+    """Decorator to require super_admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if current_user.role != 'super_admin':
+            flash('Access denied. Super Admin privileges required.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 def create_default_admin():
     """Create default admin user if none exists"""
     try:
@@ -33,12 +58,13 @@ def create_default_admin():
                 username='admin',
                 email='admin@security.local',
                 first_name='System',
-                last_name='Administrator'
+                last_name='Administrator',
+                role='super_admin'  # Set as super admin
             )
             admin.set_password('admin123')  # Default password
             db.session.add(admin)
             db.session.commit()
-            logging.info("Default admin user created: admin/admin123")
+            logging.info("Default super admin user created: admin/admin123")
         return admin
     except Exception as e:
         logging.error(f"Error creating default admin: {e}")
@@ -58,10 +84,19 @@ def login():
         user = AdminUser.query.filter_by(username=username).first()
         
         if user and user.check_password(password):
+            # Update last login time
+            user.last_login = datetime.now()
+            db.session.commit()
+            
             login_user(user)
             next_page = request.args.get('next')
             flash(f'Welcome back, {user.first_name}!', 'success')
-            return redirect(next_page) if next_page else redirect(url_for('admin_dashboard'))
+            
+            # Redirect based on role
+            if user.can_access_dashboard():
+                return redirect(next_page) if next_page else redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('access_control'))
         else:
             flash('Invalid username or password', 'danger')
     

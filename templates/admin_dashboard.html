@@ -21,6 +21,12 @@
             <i class="fas fa-download me-2"></i>
             Download Template
         </a>
+        {% if current_user.role == 'super_admin' %}
+        <a href="{{ url_for('manage_admins') }}" class="btn btn-outline-info">
+            <i class="fas fa-users-cog me-2"></i>
+            Manage Admins
+        </a>
+        {% endif %}
     </div>
 </div>
 
