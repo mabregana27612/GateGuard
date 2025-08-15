@@ -293,26 +293,122 @@ function displayCSVAnalytics(data) {
     
     data.preview.forEach(record => {
         const row = tbody.insertRow();
+        
+        // Add error styling for rows with issues
+        if (record.has_errors) {
+            row.className = 'table-warning';
+        }
+        
         row.innerHTML = `
-            <td>${record.full_name}</td>
-            <td><code>${record.qr_code_id}</code></td>
-            <td><span class="badge bg-${record.status === 'allowed' ? 'success' : 'danger'}">${record.status}</span></td>
-            <td><span class="badge bg-${getStatusBadgeColor(record.import_status)}">${record.import_status}</span></td>
+            <td>
+                ${record.complete_name || record.full_name}
+                ${record.has_errors ? '<i class="fas fa-exclamation-triangle text-warning ms-2" title="Has validation errors"></i>' : ''}
+            </td>
+            <td><code>${record.barcode || record.qr_code_id}</code></td>
+            <td><span class="badge bg-${record.status === 'allowed' || record.status === 'Active' ? 'success' : 'danger'}">${record.status}</span></td>
+            <td>
+                <span class="badge bg-${getStatusBadgeColor(record.import_status)}">${record.import_status}</span>
+                ${record.error_count > 0 ? `<small class="text-danger d-block">${record.error_count} error(s)</small>` : ''}
+            </td>
         `;
+        
+        // Add tooltip with error details if there are errors
+        if (record.errors && record.errors.length > 0) {
+            row.title = 'Errors: ' + record.errors.join('; ');
+        }
     });
     
-    // Show errors if any
+    // Show errors and detailed explanations
     const errorDetails = document.getElementById('errorDetails');
     const errorList = document.getElementById('errorList');
     
     if (data.errors && data.errors.length > 0) {
         errorDetails.style.display = 'block';
         errorList.innerHTML = '';
+        
+        // Show regular errors
         data.errors.forEach(error => {
             const li = document.createElement('li');
-            li.textContent = error;
+            li.className = 'text-danger mb-1';
+            li.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i>${error}`;
             errorList.appendChild(li);
         });
+        
+        // Add separator if there are undefined fields or validation issues
+        if ((data.undefined_fields && data.undefined_fields.length > 0) || 
+            (data.field_explanations && data.field_explanations.length > 0)) {
+            const separator = document.createElement('hr');
+            errorList.appendChild(separator);
+        }
+        
+        // Show undefined fields explanation
+        if (data.undefined_fields && data.undefined_fields.length > 0) {
+            const undefinedHeader = document.createElement('h6');
+            undefinedHeader.className = 'text-warning mt-3 mb-2';
+            undefinedHeader.innerHTML = '<i class="fas fa-question-circle me-2"></i>Unrecognized Columns';
+            errorList.appendChild(undefinedHeader);
+            
+            const undefinedList = document.createElement('ul');
+            undefinedList.className = 'list-unstyled ms-3';
+            data.undefined_fields.forEach(field => {
+                const li = document.createElement('li');
+                li.className = 'text-warning small';
+                li.innerHTML = `<i class="fas fa-arrow-right me-2"></i><code>${field}</code>`;
+                undefinedList.appendChild(li);
+            });
+            errorList.appendChild(undefinedList);
+        }
+        
+        // Show field explanations
+        if (data.field_explanations && data.field_explanations.length > 0) {
+            data.field_explanations.forEach(explanation => {
+                const explanationDiv = document.createElement('div');
+                explanationDiv.className = 'alert alert-warning mt-3';
+                explanationDiv.innerHTML = `
+                    <h6 class="alert-heading">${explanation.title}</h6>
+                    <p class="mb-2">${explanation.description}</p>
+                    <hr>
+                    <ul class="mb-0">
+                        ${explanation.suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
+                    </ul>
+                `;
+                errorList.appendChild(explanationDiv);
+            });
+        }
+        
+        // Show validation summary if available
+        if (data.validation_summary) {
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'alert alert-info mt-3';
+            summaryDiv.innerHTML = `
+                <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>CSV Format Guide</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-success">Required Fields:</h6>
+                        <ul class="small">
+                            ${Object.entries(data.validation_summary.required_fields).map(([field, desc]) => 
+                                `<li><code>${field}</code> - ${desc}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Optional Fields:</h6>
+                        <ul class="small">
+                            ${Object.entries(data.validation_summary.optional_fields).slice(0, 4).map(([field, desc]) => 
+                                `<li><code>${field}</code> - ${desc}</li>`).join('')}
+                        </ul>
+                        <small class="text-muted">...and more</small>
+                    </div>
+                </div>
+                <hr>
+                <h6 class="text-warning">Format Requirements:</h6>
+                <ul class="small mb-0">
+                    ${Object.entries(data.validation_summary.format_requirements).map(([field, format]) => 
+                        `<li><code>${field}</code>: ${format}</li>`).join('')}
+                </ul>
+            `;
+            errorList.appendChild(summaryDiv);
+        }
+        
     } else {
         errorDetails.style.display = 'none';
     }

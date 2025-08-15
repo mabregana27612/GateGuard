@@ -129,19 +129,47 @@ class SecurityService:
         error_records = 0
         errors = []
         preview_data = []
+        validation_issues = []
+        undefined_fields = []
+        
+        # Check for common field variations and undefined columns
+        expected_fields = {
+            'first_name': ['first_name', 'fname', 'firstname'],
+            'last_name': ['last_name', 'lname', 'lastname', 'surname'],
+            'middle_name': ['middle_name', 'mname', 'middlename'],
+            'complete_name': ['complete_name', 'full_name', 'fullname', 'name'],
+            'barcode': ['barcode', 'qr_code_id', 'id_number', 'qr_id', 'code'],
+            'status': ['status', 'state', 'active'],
+            'role': ['role', 'position', 'job_title', 'title'],
+            'company': ['company', 'organization', 'employer'],
+            'address': ['address', 'location'],
+            'contact_number': ['contact_number', 'phone', 'mobile', 'telephone'],
+            'date_registered': ['date_registered', 'registration_date', 'reg_date']
+        }
+        
+        # Identify undefined or unrecognized columns
+        recognized_fields = set()
+        for field_variations in expected_fields.values():
+            recognized_fields.update(field_variations)
+        
+        unrecognized_columns = [col for col in headers if col.lower().strip() not in recognized_fields]
+        if unrecognized_columns:
+            undefined_fields.extend(unrecognized_columns)
         
         for row_num, row in enumerate(csv_reader, start=2):  # Start from 2 (after header)
             total_records += 1
+            current_row_errors = []
             
             # Extract name fields (Excel format)
             first_name = row.get('first_name', '').strip()
             last_name = row.get('last_name', '').strip()
             middle_name = row.get('middle_name', '').strip()
             
-            if not first_name or not last_name:
-                error_records += 1
-                errors.append(f"Row {row_num}: Missing first_name or last_name")
-                continue
+            # Validate required fields with detailed error messages
+            if not first_name:
+                current_row_errors.append("Missing 'first_name' - This field is required")
+            if not last_name:
+                current_row_errors.append("Missing 'last_name' - This field is required")
             
             # Build complete name
             complete_name = row.get('complete_name', '').strip()
@@ -155,12 +183,23 @@ class SecurityService:
                       row.get('id_number', '')).strip()
             
             if not barcode:
-                error_records += 1
-                errors.append(f"Row {row_num}: Missing barcode/QR Code ID")
-                continue
+                current_row_errors.append("Missing barcode/QR code - Need one of: 'barcode', 'qr_code_id', or 'id_number'")
             
-            # Extract other fields (Excel format)
+            # Validate QR code format
+            if barcode and (len(barcode) < 3 or len(barcode) > 50):
+                current_row_errors.append(f"Invalid barcode length '{barcode}' - Must be 3-50 characters")
+            
+            # Check for special characters in QR code
+            if barcode and not barcode.replace('-', '').replace('_', '').isalnum():
+                current_row_errors.append(f"Invalid barcode format '{barcode}' - Only letters, numbers, hyphens, and underscores allowed")
+            
+            # Validate status field
             status = row.get('status', 'Active').strip()
+            valid_statuses = ['active', 'inactive', 'allowed', 'banned', 'pending']
+            if status and status.lower() not in valid_statuses:
+                current_row_errors.append(f"Invalid status '{status}' - Must be one of: {', '.join(valid_statuses)}")
+            
+            # Normalize status
             if status.lower() in ['active', 'allowed']:
                 status = 'Active'
             elif status.lower() in ['inactive', 'banned']:
@@ -168,17 +207,57 @@ class SecurityService:
             else:
                 status = 'Active'  # Default to Active
             
+            # Validate contact number format
+            contact_number = row.get('contact_number', '').strip()
+            if contact_number and not contact_number.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
+                current_row_errors.append(f"Invalid contact number format '{contact_number}' - Should contain only numbers and common phone formatting characters")
+            
+            # Validate date format
+            date_registered = row.get('date_registered', '').strip()
+            if date_registered:
+                valid_date = False
+                try:
+                    from datetime import datetime
+                    datetime.strptime(date_registered, '%Y-%m-%d')
+                    valid_date = True
+                except ValueError:
+                    try:
+                        datetime.strptime(date_registered, '%m/%d/%Y')
+                        valid_date = True
+                    except ValueError:
+                        pass
+                
+                if not valid_date:
+                    current_row_errors.append(f"Invalid date format '{date_registered}' - Use YYYY-MM-DD or MM/DD/YYYY format")
+            
             # Check for duplicates using barcode
             import_status = 'New'
-            if barcode in existing_qr_codes:
+            if barcode and barcode in existing_qr_codes:
+                current_row_errors.append(f"Duplicate barcode '{barcode}' - This code already exists in the system")
                 duplicate_records += 1
                 import_status = 'Duplicate'
+            
+            # Record errors for this row or mark as valid
+            if current_row_errors:
+                error_records += 1
+                for error in current_row_errors:
+                    errors.append(f'Row {row_num}: {error}')
+                    validation_issues.append({
+                        'row': row_num,
+                        'field': error.split("'")[1] if "'" in error else 'General',
+                        'issue': error,
+                        'severity': 'Error' if 'Missing' in error or 'Duplicate' in error else 'Warning'
+                    })
             else:
                 new_records += 1
+                # Add to existing QR codes to check for duplicates within the same file
+                if barcode:
+                    existing_qr_codes.add(barcode)
             
-            # Add to preview (first 10 new records only)
-            if len(preview_data) < 10 and import_status == 'New':
+            # Add to preview (first 10 records, including ones with errors for review)
+            if len(preview_data) < 10:
                 preview_data.append({
+                    'row': row_num,
                     'complete_name': complete_name,
                     'barcode': barcode,
                     'first_name': first_name,
@@ -186,8 +265,51 @@ class SecurityService:
                     'role': row.get('role', ''),
                     'company': row.get('company', ''),
                     'status': status,
-                    'import_status': import_status
+                    'import_status': import_status,
+                    'has_errors': len(current_row_errors) > 0,
+                    'error_count': len(current_row_errors),
+                    'errors': current_row_errors if current_row_errors else []
                 })
+        
+        # Generate field explanations for undefined columns
+        field_explanations = []
+        if undefined_fields:
+            field_explanations.append({
+                'type': 'undefined_columns',
+                'title': 'Unrecognized Column Names',
+                'description': f'The following columns were not recognized: {", ".join(undefined_fields)}',
+                'suggestions': [
+                    'Check for typos in column names',
+                    'Use standard field names like: first_name, last_name, barcode, status, role, company',
+                    'Remove any extra spaces or special characters from column headers',
+                    'Ensure column names match exactly (case-sensitive)'
+                ]
+            })
+        
+        # Generate validation summary
+        validation_summary = {
+            'required_fields': {
+                'first_name': 'Required - Person\'s first name',
+                'last_name': 'Required - Person\'s last name', 
+                'barcode': 'Required - Unique identifier (can also be named qr_code_id or id_number)'
+            },
+            'optional_fields': {
+                'middle_name': 'Optional - Person\'s middle name',
+                'complete_name': 'Optional - Full name (auto-generated if not provided)',
+                'role': 'Optional - Job title or position',
+                'company': 'Optional - Organization or employer',
+                'address': 'Optional - Physical address',
+                'contact_number': 'Optional - Phone number (numbers and basic formatting only)',
+                'status': 'Optional - Must be: active, inactive, allowed, banned, or pending (defaults to active)',
+                'date_registered': 'Optional - Registration date in YYYY-MM-DD or MM/DD/YYYY format'
+            },
+            'format_requirements': {
+                'barcode': '3-50 characters, letters/numbers/hyphens/underscores only',
+                'status': 'One of: active, inactive, allowed, banned, pending',
+                'contact_number': 'Numbers with optional +, -, (), spaces',
+                'date_registered': 'YYYY-MM-DD or MM/DD/YYYY format'
+            }
+        }
         
         return {
             'success': True,
@@ -196,6 +318,10 @@ class SecurityService:
             'duplicate_records': duplicate_records,
             'error_records': error_records,
             'errors': errors,
+            'validation_issues': validation_issues,
+            'undefined_fields': undefined_fields,
+            'field_explanations': field_explanations,
+            'validation_summary': validation_summary,
             'preview': preview_data
         }
     
